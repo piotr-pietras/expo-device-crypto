@@ -1,0 +1,9 @@
+{
+  "platforms": ["apple", "android"],
+  "apple": {
+    "modules": ["SecureSigningModule"]
+  },
+  "android": {
+    "modules": ["expo.modules.securesigning.SecureSigningModule"]
+  }
+}

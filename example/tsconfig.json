@@ -1,0 +1,10 @@
+{
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    "strict": true,
+    "paths": {
+      "expo-secure-signing": ["../src/index"],
+      "expo-secure-signing/*": ["../src/*"]
+    }
+  }
+}
