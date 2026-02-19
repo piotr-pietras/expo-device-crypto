@@ -14,7 +14,7 @@ export default function TestScreen() {
 
   return (
     <ScrollView style={styles.container}>
-      <Group name="Generate Key Pair (should return public key)">
+      {/* <Group name="Generate Key Pair (should return public key)">
         <TextInput
           style={styles.input}
           placeholder="Enter alias"
@@ -47,7 +47,7 @@ export default function TestScreen() {
           }}
           title="Remove Key Pair"
         />
-      </Group>
+      </Group> */}
       <Group name="Get Public Key">
         <TextInput
           style={styles.input}
@@ -59,7 +59,7 @@ export default function TestScreen() {
           onPress={() =>
             setRetrievedPublicKey(
               SecureSigning.getPublicKey(retrieveAlias, {
-                format: 'PEM',
+                format: "PEM",
               }) ?? ""
             )
           }
@@ -76,21 +76,27 @@ export default function TestScreen() {
         />
         <Button
           onPress={() => {
-            console.log(textToSign);
-            console.log(alias);
-            setSignature(SecureSigning.sign(alias, textToSign));
+            SecureSigning.sign(alias, textToSign)
+              .then((signature) => {
+                setSignature(signature ?? "");
+              })
+              .catch((error) => {
+                console.error(error);
+              });
           }}
           title="Sign"
         />
         <TextInput
-          style={styles.input}
+          style={[styles.input, { height: 100 }]}
           placeholder="Generated signature"
+          multiline={true}
+          numberOfLines={4}
           value={signature}
           onChangeText={setSignature}
         />
         {signature && (
           <>
-            <Button
+            {/* <Button
               onPress={() => {
                 console.info({});
 
@@ -110,7 +116,7 @@ export default function TestScreen() {
             />
             <Text style={{ color: verified ? "green" : "red" }}>
               {verified ? "Signature verified" : "Signature not verified!"}
-            </Text>
+            </Text> */}
           </>
         )}
       </Group>

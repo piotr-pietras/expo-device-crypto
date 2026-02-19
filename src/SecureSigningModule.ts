@@ -17,7 +17,7 @@ declare class SecureSigningModule extends NativeModule {
   getPublicKey(alias: string): string | null;
   removeKeyPair(alias: string): boolean;
   aliases(): string[];
-  sign(alias: string, data: string): string;
+  sign(alias: string, data: string): Promise<string | null>;
   verify(alias: string, data: string, signature: string): boolean | null;
 }
 
@@ -61,7 +61,7 @@ export default {
    * @param data - The data to sign.
    * @returns The signature.
    */
-  sign: module.sign,
+  sign: async (alias: string, data: string) => module.sign(alias, data),
   /**
    * Verifies the given data with the signature for the given alias.
    * @param alias - The alias to use for the key pair.
