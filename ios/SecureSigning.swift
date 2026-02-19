@@ -91,6 +91,15 @@ public class SecureSigningModule: Module {
         return SecureSigningModuleResult.KEY_PAIR_ALREADY_EXISTS.rawValue
       }
 
+//       guard let access = SecAccessControlCreateWithFlags(
+//         kCFAllocatorDefault,
+//         kSecAttrAccessibleWhenPasscodeSetThisDeviceOnly,
+//         [.privateKeyUsage, .userPresence],
+//         nil
+//       ) else {
+//         return SecureSigningModuleResult.NOT_AVAILABLE.rawValue
+//       }
+
       guard let access = SecAccessControlCreateWithFlags(
         kCFAllocatorDefault,
         kSecAttrAccessibleWhenUnlockedThisDeviceOnly,
