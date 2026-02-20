@@ -1,8 +1,18 @@
-import SecureSigning from "expo-secure-signing";
+import SecureSigning, { AuthCheckResult } from "expo-secure-signing";
 import { useState } from "react";
-import { Button, ScrollView, Text, TextInput, View } from "react-native";
+import {
+  Button,
+  ScrollView,
+  Switch,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 
 export default function TestScreen() {
+  const [authCheckAvailable, setAuthCheckAvailable] = useState<string>("");
+  const [requireAuthentication, setRequireAuthentication] =
+    useState<boolean>(false);
   const [alias, setAlias] = useState<string>("key-pair-alias");
   const [generated, setGenerated] = useState<string>("");
   const [textToSign, setTextToSign] = useState<string>("text to sign");
@@ -14,7 +24,32 @@ export default function TestScreen() {
 
   return (
     <ScrollView style={styles.container}>
-      {/* <Group name="Generate Key Pair (should return public key)">
+      <Group name="Auth Check Available">
+        <Text
+          style={{
+            color:
+              authCheckAvailable === AuthCheckResult.AVAILABLE
+                ? "green"
+                : "red",
+          }}
+        >
+          {authCheckAvailable}
+        </Text>
+        <Button
+          onPress={() =>
+            setAuthCheckAvailable(SecureSigning.isAuthCheckAvailable())
+          }
+          title="Auth Check Available"
+        />
+      </Group>
+      <Group name="Generate Key Pair (should return public key)">
+        <View>
+          <Text>Require Authentication</Text>
+          <Switch
+            value={requireAuthentication}
+            onValueChange={setRequireAuthentication}
+          />
+        </View>
         <TextInput
           style={styles.input}
           placeholder="Enter alias"
@@ -22,7 +57,17 @@ export default function TestScreen() {
           onChangeText={setAlias}
         />
         <Button
-          onPress={() => setGenerated(SecureSigning.generateKeyPair(alias))}
+          onPress={() =>
+            SecureSigning.generateKeyPair(alias, {
+              requireAuthentication,
+            })
+              .then((result) => {
+                setGenerated(result);
+              })
+              .catch((error) => {
+                console.error(error);
+              })
+          }
           title="Create Keys"
         />
         <Text style={{ color: generated ? "green" : "red" }}>{generated}</Text>
@@ -41,13 +86,11 @@ export default function TestScreen() {
         />
         <Button
           onPress={() => {
-            const newLocal = SecureSigning.removeKeyPair(removeAlias);
-            console.info(newLocal);
-            console.info(SecureSigning.aliases());
+            SecureSigning.removeKeyPair(removeAlias);
           }}
           title="Remove Key Pair"
         />
-      </Group> */}
+      </Group>
       <Group name="Get Public Key">
         <TextInput
           style={styles.input}
@@ -76,9 +119,11 @@ export default function TestScreen() {
         />
         <Button
           onPress={() => {
-            SecureSigning.sign(alias, textToSign)
-              .then((signature) => {
-                setSignature(signature ?? "");
+            SecureSigning.sign(alias, textToSign, {
+              requireAuthentication,
+            })
+              .then((result) => {
+                setSignature(result ?? "");
               })
               .catch((error) => {
                 console.error(error);

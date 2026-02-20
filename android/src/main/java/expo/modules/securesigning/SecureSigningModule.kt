@@ -10,20 +10,43 @@ import java.security.KeyStore
 import android.util.Base64
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
+import androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_STRONG
+import androidx.biometric.BiometricManager.Authenticators.DEVICE_CREDENTIAL
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
 import expo.modules.kotlin.Promise
 import java.security.Signature
 import android.widget.Toast
+import android.content.Context
 
-
-enum class SecureSigningModuleResult {
+enum class GenerateKeyPairResult {
   KEY_PAIR_GENERATED,
   KEY_PAIR_ALREADY_EXISTS,
   NOT_AVAILABLE,
 }
 
+enum class AuthCheckResult {
+  AVAILABLE,
+  UNAVAILABLE,
+  NO_HARDWARE,
+}
+
+enum class SignMethod {
+  PASSCODE,
+  PASSCODE_OR_BIOMETRIC,
+}
+
 class SecureSigningModule : Module() {
+  private fun isAuthCheckAvailable(): AuthCheckResult {
+    val biometricManager = BiometricManager.from(appContext.reactContext as Context)
+    return when (biometricManager.canAuthenticate(BIOMETRIC_STRONG or DEVICE_CREDENTIAL)) {
+      BiometricManager.BIOMETRIC_SUCCESS -> AuthCheckResult.AVAILABLE
+      BiometricManager.BIOMETRIC_ERROR_NO_HARDWARE -> AuthCheckResult.NO_HARDWARE
+      BiometricManager.BIOMETRIC_ERROR_HW_UNAVAILABLE -> AuthCheckResult.UNAVAILABLE
+      else -> AuthCheckResult.UNAVAILABLE
+    }
+  }
+
   private fun isAvailable(): Boolean {
     val pm = appContext.reactContext?.packageManager ?: return false
     val appAttestKeystore = pm.hasSystemFeature(PackageManager.FEATURE_KEYSTORE_APP_ATTEST_KEY)
@@ -67,7 +90,10 @@ class SecureSigningModule : Module() {
 
   private fun showAuthPrompt(
     onSuccess: () -> Unit,
-    onError: (String) -> Unit
+    onError: (String) -> Unit,
+    title: String = "Unlock",
+    subtitle: String = "Enter your PIN to continue",
+    authMethod: SignMethod
   ) {
     val activity = appContext.currentActivity as? FragmentActivity ?: run {
       onError("No active FragmentActivity found")
@@ -99,10 +125,13 @@ class SecureSigningModule : Module() {
       )
 
       val promptInfo = BiometricPrompt.PromptInfo.Builder()
-        .setTitle("Unlock")
-        .setSubtitle("Enter your PIN to continue")
+        .setTitle(title)
+        .setSubtitle(subtitle)
         .setAllowedAuthenticators(
-          BiometricManager.Authenticators.DEVICE_CREDENTIAL
+          when (authMethod) {
+            SignMethod.PASSCODE -> BiometricManager.Authenticators.DEVICE_CREDENTIAL
+            SignMethod.PASSCODE_OR_BIOMETRIC -> BiometricManager.Authenticators.BIOMETRIC_STRONG or BiometricManager.Authenticators.DEVICE_CREDENTIAL
+          }
         )
         .build()
 
@@ -110,18 +139,25 @@ class SecureSigningModule : Module() {
     }
   }
 
-
   override fun definition() = ModuleDefinition {
     Name("SecureSigning")
 
-    Function("generateKeyPair") { alias: String ->
+    Function("isAuthCheckAvailable") { ->
+      return@Function isAuthCheckAvailable()
+    }
+
+    Function("generateKeyPair") { alias: String, o: Map<String, Any?> ->
+      val reqAuth = o["reqAuth"] as Boolean
+      if (reqAuth && isAuthCheckAvailable() != AuthCheckResult.AVAILABLE) {
+        throw Exception("NO_AUTH_AVAILABLE")
+      }
       if (!isAvailable()) {
-        return@Function SecureSigningModuleResult.NOT_AVAILABLE
+        return@Function GenerateKeyPairResult.NOT_AVAILABLE
       }
       if (getKeyStoreEntry(alias) != null) {
-        return@Function SecureSigningModuleResult.KEY_PAIR_ALREADY_EXISTS
+        return@Function GenerateKeyPairResult.KEY_PAIR_ALREADY_EXISTS
       }
-      
+
       val kpg: KeyPairGenerator = KeyPairGenerator.getInstance(
         KeyProperties.KEY_ALGORITHM_EC,
         "AndroidKeyStore"
@@ -133,17 +169,19 @@ class SecureSigningModule : Module() {
       ).run {
         setDigests(KeyProperties.DIGEST_SHA256)
         setIsStrongBoxBacked(isStrongBoxAvailable())
-        setUserAuthenticationRequired(true)
-        setUserAuthenticationParameters(
-          0,
-          KeyProperties.AUTH_BIOMETRIC_STRONG or KeyProperties.AUTH_DEVICE_CREDENTIAL
-        )
+        setUserAuthenticationRequired(reqAuth)
+        if (reqAuth) {
+          setUserAuthenticationParameters(
+            30, // 30 seconds
+            KeyProperties.AUTH_BIOMETRIC_STRONG or KeyProperties.AUTH_DEVICE_CREDENTIAL
+          )
+        }
         build()
       }
       kpg.initialize(parameterSpec)
       kpg.generateKeyPair()
 
-      return@Function SecureSigningModuleResult.KEY_PAIR_GENERATED
+      return@Function GenerateKeyPairResult.KEY_PAIR_GENERATED
     }
 
     Function("removeKeyPair") { alias: String ->
@@ -159,42 +197,49 @@ class SecureSigningModule : Module() {
       return@Function retrievePublicKey(entry)
     }
 
-    AsyncFunction("sign") { alias: String, data: String, promise: Promise ->
-      // val entry = getKeyStoreEntry(alias)
-      // if (entry !is KeyStore.PrivateKeyEntry) return@AsyncFunction null
-      
-      // val signature: ByteArray = Signature.getInstance("SHA256withECDSA").apply {
-      //   initSign(entry.privateKey)
-      //   update(data.toByteArray(Charsets.UTF_8))
-      // }.sign()
-      // return@AsyncFunction Base64.encodeToString(signature, Base64.NO_WRAP)
-
+    AsyncFunction("sign") { alias: String,
+      data: String,
+      o:  Map<String, Any?>,
+      promise: Promise ->
       val entry = getKeyStoreEntry(alias)
       if (entry !is KeyStore.PrivateKeyEntry) {
         promise.resolve(null)
         return@AsyncFunction
       }
 
-      showAuthPrompt(
-        onSuccess = {
-          try {
-            val signature = Signature.getInstance("SHA256withECDSA").apply {
+      val reqAuth = o["reqAuth"] as Boolean
+      val title = o["title"] as String
+      val subtitle = o["subtitle"] as String
+      val authMethod = o["authMethod"] as String
+
+      if (!reqAuth) {
+        val signature: ByteArray = Signature.getInstance("SHA256withECDSA").apply {
+          initSign(entry.privateKey)
+          update(data.toByteArray(Charsets.UTF_8))
+        }.sign()
+        promise.resolve(Base64.encodeToString(signature, Base64.NO_WRAP))
+        return@AsyncFunction
+      } else {
+        showAuthPrompt(
+          onSuccess = {
+            val signature: ByteArray = Signature.getInstance("SHA256withECDSA").apply {
               initSign(entry.privateKey)
               update(data.toByteArray(Charsets.UTF_8))
-            }
-            val signed = signature.sign()
-            promise.resolve(Base64.encodeToString(signed, Base64.NO_WRAP))
-            appContext.reactContext?.let { context ->
-              Toast.makeText(context.applicationContext, Base64.encodeToString(signed, Base64.NO_WRAP), Toast.LENGTH_LONG).show()
-            }
-          } catch (e: Exception) {
-            promise.reject("ERR_SIGN_FAILED", "Unable to sign payload", e)
+            }.sign()
+            promise.resolve(Base64.encodeToString(signature, Base64.NO_WRAP))
+          },
+          onError = { error ->
+            promise.reject("ERR_AUTH_FAILED", error, null)
+          },
+          title = title,
+          subtitle = subtitle,
+          authMethod = when (authMethod) {
+            "PASSCODE" -> SignMethod.PASSCODE
+            "PASSCODE_OR_BIOMETRIC" -> SignMethod.PASSCODE_OR_BIOMETRIC
+            else -> SignMethod.PASSCODE_OR_BIOMETRIC
           }
-        },
-        onError = { error ->
-          promise.reject("ERR_AUTH_FAILED", error, null)
-        }
-      )
+        )
+      }
     }
 
     Function("verify") { alias: String, data: String, signature: String ->
