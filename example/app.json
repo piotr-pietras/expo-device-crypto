@@ -14,7 +14,10 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "expo.modules.securesigning.example"
+      "bundleIdentifier": "expo.modules.securesigning.example",
+      "infoPlist": {
+        "NSFaceIDUsageDescription": "We use Face ID to secure your data."
+      }
     },
     "android": {
       "adaptiveIcon": {

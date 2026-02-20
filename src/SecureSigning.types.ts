@@ -10,6 +10,11 @@ export enum AuthCheckResult {
   UNAVAILABLE = "UNAVAILABLE",
 }
 
+export enum SignMethod {
+  PASSCODE = "PASSCODE",
+  PASSCODE_OR_BIOMETRIC = "PASSCODE_OR_BIOMETRIC",
+}
+
 export interface GenerateKeyPairOptions {
   /**
    * Whether to require authentication to sign.
@@ -20,24 +25,25 @@ export interface GenerateKeyPairOptions {
    * @default false
    */
   requireAuthentication?: boolean;
-}
-
-export enum SignMethod {
-  PASSCODE = "PASSCODE",
-  PASSCODE_OR_BIOMETRIC = "PASSCODE_OR_BIOMETRIC",
+  /**
+   * The method of authentication to use.
+   * Note that on Android you have to define it when signing.
+   * 
+   * If you want to allow to use Face ID, you need to add the following to your app.json config file:
+   * ```json
+   * "ios": {
+   *   "infoPlist": {
+   *     "NSFaceIDUsageDescription": "We use Face ID to secure your data.",
+   *   }
+   * }
+   * ```
+   * @default SignMethod.PASSCODE_OR_BIOMETRIC
+   * @platform ios
+   */
+  authMethod?: SignMethod;
 }
 
 export interface SignOptions {
-  /**
-   * If your keychain requires authentication to sign, set this to true.
-   *
-   * **Important:**
-   * Please note that ios cannot implicitly verify if the existing keychain needs authentication.
-   * To unify interface for all platforms, you need to set this to true if you called *`generateKeyPair`*
-   * with *`requireAuthentication`* option set to true for a desired key pair alias.
-   * @default false
-   */
-  requireAuthentication?: boolean;
   /**
    * The title of the prompt to show when authentication is required.
    * @default "Unlock"
@@ -52,6 +58,7 @@ export interface SignOptions {
   promptSubtitle?: string;
   /**
    * The method of authentication to use.
+   * Note that on iOS you have to define it when generating the key pair.
    * @default SignMethod.PASSCODE_OR_BIOMETRIC
    * @platform android
    */

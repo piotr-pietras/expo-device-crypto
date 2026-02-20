@@ -2,6 +2,7 @@ package expo.modules.securesigning
 
 import android.content.pm.PackageManager
 import android.security.keystore.KeyGenParameterSpec
+import android.security.keystore.KeyInfo
 import android.security.keystore.KeyProperties
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
@@ -18,6 +19,7 @@ import expo.modules.kotlin.Promise
 import java.security.Signature
 import android.widget.Toast
 import android.content.Context
+import java.security.KeyFactory
 
 enum class GenerateKeyPairResult {
   KEY_PAIR_GENERATED,
@@ -47,7 +49,7 @@ class SecureSigningModule : Module() {
     }
   }
 
-  private fun isAvailable(): Boolean {
+  private fun isKeyStoreAvailable(): Boolean {
     val pm = appContext.reactContext?.packageManager ?: return false
     val appAttestKeystore = pm.hasSystemFeature(PackageManager.FEATURE_KEYSTORE_APP_ATTEST_KEY)
     val hardwareKeystore = pm.hasSystemFeature(PackageManager.FEATURE_HARDWARE_KEYSTORE)
@@ -63,6 +65,12 @@ class SecureSigningModule : Module() {
   private fun getAliases() = KeyStore.getInstance("AndroidKeyStore").apply {
     load(null)
   }.aliases().toList()
+
+  private fun isKeyStoreRequireAuthentication(entry: KeyStore.PrivateKeyEntry): Boolean {
+    val keyFactory = KeyFactory.getInstance(entry.privateKey.algorithm, "AndroidKeyStore")
+    val keyInfo = keyFactory.getKeySpec(entry.privateKey, KeyInfo::class.java)
+    return keyInfo.isUserAuthenticationRequired
+  }
 
   private fun getKeyStoreEntry(alias: String): KeyStore.Entry? {
     return KeyStore.getInstance("AndroidKeyStore").apply {
@@ -151,7 +159,7 @@ class SecureSigningModule : Module() {
       if (reqAuth && isAuthCheckAvailable() != AuthCheckResult.AVAILABLE) {
         throw Exception("NO_AUTH_AVAILABLE")
       }
-      if (!isAvailable()) {
+      if (!isKeyStoreAvailable()) {
         return@Function GenerateKeyPairResult.NOT_AVAILABLE
       }
       if (getKeyStoreEntry(alias) != null) {
@@ -207,7 +215,8 @@ class SecureSigningModule : Module() {
         return@AsyncFunction
       }
 
-      val reqAuth = o["reqAuth"] as Boolean
+      val reqAuth = isKeyStoreRequireAuthentication(entry);
+
       val title = o["title"] as String
       val subtitle = o["subtitle"] as String
       val authMethod = o["authMethod"] as String

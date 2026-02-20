@@ -46,6 +46,7 @@ export default {
   generateKeyPair: async (alias: string, options?: GenerateKeyPairOptions) => {
     const o = {
       reqAuth: options?.requireAuthentication ?? false,
+      authMethod: options?.authMethod ?? SignMethod.PASSCODE_OR_BIOMETRIC,
     };
     return module.generateKeyPair(alias, o);
   },
@@ -83,7 +84,6 @@ export default {
    */
   sign: async (alias: string, data: string, options?: SignOptions) => {
     const o = {
-      reqAuth: options?.requireAuthentication ?? false,
       title: options?.promptTitle ?? "Unlock",
       subtitle: options?.promptSubtitle ?? "Enter your PIN to continue",
       authMethod: options?.authMethod ?? SignMethod.PASSCODE_OR_BIOMETRIC,
