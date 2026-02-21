@@ -1,4 +1,4 @@
-import SecureSigning, { AuthCheckResult } from "expo-secure-signing";
+import SecureSigning, { AuthCheckResult, SignMethod } from "expo-secure-signing";
 import { useState } from "react";
 import {
   Button,
@@ -16,7 +16,7 @@ export default function TestScreen() {
   const [alias, setAlias] = useState<string>("key-pair-alias");
   const [generated, setGenerated] = useState<string>("");
   const [textToSign, setTextToSign] = useState<string>("text to sign");
-  const [removeAlias, setRemoveAlias] = useState<string>("key-pair-alias");
+  const [removeAlias, setRemoveAlias] = useState<string>("Test");
   const [signature, setSignature] = useState<string>("");
   const [verified, setVerified] = useState<boolean>(false);
   const [retrieveAlias, setRetrieveAlias] = useState<string>("key-pair-alias");
@@ -63,9 +63,6 @@ export default function TestScreen() {
             })
               .then((result) => {
                 setGenerated(result);
-              })
-              .catch((error) => {
-                console.error(error);
               })
           }
           title="Create Keys"
@@ -120,7 +117,9 @@ export default function TestScreen() {
         <Button
           onPress={() => {
             SecureSigning.sign(alias, textToSign, {
-              requireAuthentication,
+              authMethod: SignMethod.PASSCODE_OR_BIOMETRIC,
+              promptTitle: "TEST",
+              promptSubtitle: "TEST",
             })
               .then((result) => {
                 setSignature(result ?? "");
