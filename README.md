@@ -2,7 +2,8 @@
 
 > ⚠️ Please note that the module is currently in beta and is not suitable for production.
 
-Secure, device-backed **ECDSA P‑256 signing** for Expo / React Native apps.
+Secure, easy to audit, device-backed **ECDSA P‑256 signing** for Expo / React Native apps.
+Also integrates with system biometric authentication and device passcode.
 
 This module stores private keys in the platform’s protected key storage:
 
@@ -66,12 +67,13 @@ import SecureSigning, {
 
 const alias = "my-auth-key";
 
-// Optional but recommended: check auth capability first
+// 1) Optional but recommended: check auth capability first
 const authStatus = SecureSigning.isAuthCheckAvailable();
 if (authStatus !== AuthCheckResult.AVAILABLE) {
   throw new Error(`Authentication not available: ${authStatus}`);
 }
 
+// 2) Export the public key
 const created = await SecureSigning.generateKeyPair(alias, {
   requireAuthentication: true,
   // iOS: choose auth method when generating the key.
@@ -84,6 +86,7 @@ if (
   throw new Error("Secure signing is not available on this device.");
 }
 
+// 3) Sign and verify with passcode/biometric prompt
 const signature = await SecureSigning.sign(alias, "sensitive payload", {
   // Android: choose auth method and optional prompt text when signing.
   authMethod: SignMethod.PASSCODE_OR_BIOMETRIC,
