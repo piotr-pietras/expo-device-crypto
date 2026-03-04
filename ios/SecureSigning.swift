@@ -9,6 +9,12 @@ enum SecureSigningModuleResult: String {
   case NOT_AVAILABLE = "NOT_AVAILABLE"
 }
 
+enum AuthCheckResult: String {
+  case AVAILABLE = "AVAILABLE"
+  case NO_HARDWARE = "NO_HARDWARE"
+  case UNAVAILABLE = "UNAVAILABLE"
+}
+
 enum AuthMethod: String {
   case PASSCODE = "PASSCODE"
   case PASSCODE_OR_BIOMETRIC = "PASSCODE_OR_BIOMETRIC"
@@ -33,9 +39,14 @@ public class SecureSigningModule: Module {
     return prefix + raw
   }
 
-  private func isAuthCheckAvailable() -> Bool {
+  private func isAuthCheckAvailable() -> String {
     let context = LAContext()
-    return context.canEvaluatePolicy(.deviceOwnerAuthentication, error: nil)
+    let available = context.canEvaluatePolicy(.deviceOwnerAuthentication, error: nil)
+    if available {
+      return AuthCheckResult.AVAILABLE.rawValue
+    } else {
+      return AuthCheckResult.UNAVAILABLE.rawValue
+    }
   }
 
   private func getAliases() -> [String] {
@@ -96,7 +107,7 @@ public class SecureSigningModule: Module {
 
     Name("SecureSigning")
 
-    Function("isAuthCheckAvailable") { () -> Bool in
+    Function("isAuthCheckAvailable") { () -> String in
       return self.isAuthCheckAvailable()
     }
 
@@ -104,7 +115,7 @@ public class SecureSigningModule: Module {
       let reqAuth = o["reqAuth"] as! Bool
       let authMethod = AuthMethod(rawValue: o["authMethod"] as! String)
 
-      if reqAuth && !self.isAuthCheckAvailable() {
+      if reqAuth && self.isAuthCheckAvailable() != AuthCheckResult.AVAILABLE.rawValue {
         throw NSError(
           domain: "SecureSigning",
           code: 1,
