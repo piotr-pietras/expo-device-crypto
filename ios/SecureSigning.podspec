@@ -1,6 +1,6 @@
 Pod::Spec.new do |s|
   s.name           = 'SecureSigning'
-  s.version        = '0.4.0'
+  s.version        = '0.4.1'
   s.summary        = 'Secure signing'
   s.description    = 'Secure signing for Expo using device hardware capabilities'
   s.author         = 'Piotr Pietras'

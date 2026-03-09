@@ -77,6 +77,7 @@ if (authStatus !== AuthCheckResult.AVAILABLE) {
 const created = await SecureSigning.generateKeyPair(alias, {
   requireAuthentication: true,
   // iOS: choose auth method when generating the key.
+  // Compared to Android, iOS requires defining the auth method before keychain creation.
   authMethod: AuthMethod.PASSCODE_OR_BIOMETRIC,
 });
 
