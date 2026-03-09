@@ -1,4 +1,4 @@
-package expo.modules.securesigning
+package expo.modules.devicecrypto
 
 import android.content.pm.PackageManager
 import android.security.keystore.KeyGenParameterSpec
@@ -20,6 +20,7 @@ import java.security.Signature
 import android.widget.Toast
 import android.content.Context
 import java.security.KeyFactory
+import javax.crypto.Cipher
 
 enum class GenerateKeyPairResult {
   KEY_PAIR_GENERATED,
@@ -38,7 +39,19 @@ enum class AuthMethod {
   PASSCODE_OR_BIOMETRIC,
 }
 
-class SecureSigningModule : Module() {
+enum class AlgorithmType {
+  ECDSA_SHA256,
+  RSA_2048_PKCS1,
+}
+
+class DeviceCryptoModule : Module() {
+  private fun toAndroidAlgo(algorithm: AlgorithmType): String {
+    return when (algorithm) {
+      AlgorithmType.ECDSA_SHA256 -> "SHA256withECDSA"
+      AlgorithmType.RSA_2048_PKCS1 -> "RSA/ECB/PKCS1Padding"
+    }
+  }
+
   private fun isAuthCheckAvailable(): AuthCheckResult {
     val biometricManager = BiometricManager.from(appContext.reactContext as Context)
     return when (biometricManager.canAuthenticate(BIOMETRIC_STRONG or DEVICE_CREDENTIAL)) {
@@ -95,6 +108,56 @@ class SecureSigningModule : Module() {
     return true
   }
 
+  private fun buildECDSA_SHA256(alias: String, reqAuth: Boolean): KeyPairGenerator {
+    val kpg: KeyPairGenerator = KeyPairGenerator.getInstance(
+      KeyProperties.KEY_ALGORITHM_EC,
+      "AndroidKeyStore"
+    )
+
+    val parameterSpec: KeyGenParameterSpec = KeyGenParameterSpec.Builder(
+      alias,
+      KeyProperties.PURPOSE_SIGN or KeyProperties.PURPOSE_VERIFY
+    ).run {
+      setDigests(KeyProperties.DIGEST_SHA256)
+      setIsStrongBoxBacked(false) // TODO: Prefer strong box if available
+      setUserAuthenticationRequired(reqAuth)
+      if (reqAuth) {
+        setUserAuthenticationParameters(
+          30, // 30 seconds
+          KeyProperties.AUTH_BIOMETRIC_STRONG or KeyProperties.AUTH_DEVICE_CREDENTIAL
+        )
+      }
+      build()
+    }
+    kpg.initialize(parameterSpec)
+    return kpg
+  }
+
+  private fun buildRSA_2048_PKCS1(alias: String, reqAuth: Boolean): KeyPairGenerator {
+    val kpg: KeyPairGenerator = KeyPairGenerator.getInstance(
+      KeyProperties.KEY_ALGORITHM_RSA,
+      "AndroidKeyStore"
+    )
+
+    val parameterSpec: KeyGenParameterSpec = KeyGenParameterSpec.Builder(
+      alias,
+      KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT
+    ).run {
+      setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_RSA_PKCS1)
+      setIsStrongBoxBacked(isStrongBoxAvailable())
+      setUserAuthenticationRequired(reqAuth)
+      if (reqAuth) {
+        setUserAuthenticationParameters(
+          30, // 30 seconds
+          KeyProperties.AUTH_BIOMETRIC_STRONG or KeyProperties.AUTH_DEVICE_CREDENTIAL
+        )
+      }
+      build()
+    }
+    kpg.initialize(parameterSpec)
+    return kpg
+  }
+
 
   private fun showAuthPrompt(
     onSuccess: () -> Unit,
@@ -148,7 +211,7 @@ class SecureSigningModule : Module() {
   }
 
   override fun definition() = ModuleDefinition {
-    Name("SecureSigning")
+    Name("DeviceCrypto")
 
     Function("isAuthCheckAvailable") { ->
       return@Function isAuthCheckAvailable()
@@ -166,27 +229,13 @@ class SecureSigningModule : Module() {
         return@Function GenerateKeyPairResult.KEY_PAIR_ALREADY_EXISTS
       }
 
-      val kpg: KeyPairGenerator = KeyPairGenerator.getInstance(
-        KeyProperties.KEY_ALGORITHM_EC,
-        "AndroidKeyStore"
-      )
-
-      val parameterSpec: KeyGenParameterSpec = KeyGenParameterSpec.Builder(
-        alias,
-        KeyProperties.PURPOSE_SIGN or KeyProperties.PURPOSE_VERIFY
-      ).run {
-        setDigests(KeyProperties.DIGEST_SHA256)
-        setIsStrongBoxBacked(isStrongBoxAvailable())
-        setUserAuthenticationRequired(reqAuth)
-        if (reqAuth) {
-          setUserAuthenticationParameters(
-            30, // 30 seconds
-            KeyProperties.AUTH_BIOMETRIC_STRONG or KeyProperties.AUTH_DEVICE_CREDENTIAL
-          )
-        }
-        build()
+      val algoType = AlgorithmType.valueOf(o["algoType"] as String)
+      val kpg = when (algoType) {
+        AlgorithmType.ECDSA_SHA256 -> buildECDSA_SHA256(alias, reqAuth)
+        AlgorithmType.RSA_2048_PKCS1 -> buildRSA_2048_PKCS1(alias, reqAuth)
+        else -> throw Exception("INVALID_KEY_TYPE")
       }
-      kpg.initialize(parameterSpec)
+
       kpg.generateKeyPair()
 
       return@Function GenerateKeyPairResult.KEY_PAIR_GENERATED
@@ -219,10 +268,12 @@ class SecureSigningModule : Module() {
 
       val title = o["title"] as String
       val subtitle = o["subtitle"] as String
-      val authMethod = o["authMethod"] as String
+      val authMethod = AuthMethod.valueOf(o["authMethod"] as String)
+      val algoType = AlgorithmType.valueOf(o["algoType"] as String)
+      val algo = toAndroidAlgo(algoType)
 
       if (!reqAuth) {
-        val signature: ByteArray = Signature.getInstance("SHA256withECDSA").apply {
+        val signature: ByteArray = Signature.getInstance(algo).apply {
           initSign(entry.privateKey)
           update(data.toByteArray(Charsets.UTF_8))
         }.sign()
@@ -231,11 +282,91 @@ class SecureSigningModule : Module() {
       } else {
         showAuthPrompt(
           onSuccess = {
-            val signature: ByteArray = Signature.getInstance("SHA256withECDSA").apply {
+            val signature: ByteArray = Signature.getInstance(algo).apply {
               initSign(entry.privateKey)
               update(data.toByteArray(Charsets.UTF_8))
             }.sign()
             promise.resolve(Base64.encodeToString(signature, Base64.NO_WRAP))
+          },
+          onError = { error ->
+            promise.reject("ERR_AUTH_FAILED", error, null)
+          },
+          title = title,
+          subtitle = subtitle,
+          authMethod = authMethod
+        )
+      }
+    }
+
+    Function("verify") { alias: String, 
+      data: String, 
+      signature: String, 
+      o: Map<String, Any?> ->
+      val entry = getKeyStoreEntry(alias)
+      if (entry !is KeyStore.PrivateKeyEntry) return@Function null
+
+      val algoType = AlgorithmType.valueOf(o["algoType"] as String)
+      val algo = toAndroidAlgo(algoType)
+      
+      val valid: Boolean = Signature.getInstance(algo).apply {
+        initVerify(entry.certificate)
+        update(data.toByteArray(Charsets.UTF_8))
+      }.verify(Base64.decode(signature, Base64.NO_WRAP))
+      return@Function true
+    }
+
+
+    AsyncFunction("encrypt") { alias: String, 
+      data: String, 
+      o: Map<String, Any?>,
+      promise: Promise ->
+      val entry = getKeyStoreEntry(alias)
+      if (entry !is KeyStore.PrivateKeyEntry) {
+        promise.resolve(null)
+        return@AsyncFunction
+      }
+
+      val algoType = AlgorithmType.valueOf(o["algoType"] as String)
+      val algo = toAndroidAlgo(algoType)
+
+      val cipher = Cipher.getInstance(algo)
+      cipher.init(Cipher.ENCRYPT_MODE, entry.certificate.publicKey)
+      val encrypted: ByteArray = cipher.doFinal(data.toByteArray(Charsets.UTF_8))
+      promise.resolve(Base64.encodeToString(encrypted, Base64.NO_WRAP))
+    }
+
+    AsyncFunction("decrypt") { alias: String, 
+      data: String, 
+      o: Map<String, Any?>, 
+      promise: Promise ->
+      val entry = getKeyStoreEntry(alias)
+      if (entry !is KeyStore.PrivateKeyEntry) {
+        promise.resolve(null)
+        return@AsyncFunction
+      }
+
+      val reqAuth = isKeyStoreRequireAuthentication(entry)
+
+      val title = o["title"] as String
+      val subtitle = o["subtitle"] as String
+      val authMethod = o["authMethod"] as String
+      val algoType = AlgorithmType.valueOf(o["algoType"] as String)
+      val algo = toAndroidAlgo(algoType)
+
+      val cipher = Cipher.getInstance(algo)
+      val ciphertext = Base64.decode(data, Base64.NO_WRAP)
+
+      if (!reqAuth) {
+        cipher.init(Cipher.DECRYPT_MODE, entry.privateKey)
+        val decrypted: ByteArray = cipher.doFinal(ciphertext)
+        promise.resolve(String(decrypted, Charsets.UTF_8))
+        return@AsyncFunction
+      } else {
+        showAuthPrompt(
+          onSuccess = {
+            cipher.init(Cipher.DECRYPT_MODE, entry.privateKey)
+            val decrypted: ByteArray = cipher.doFinal(ciphertext)
+            promise.resolve(String(decrypted, Charsets.UTF_8))
           },
           onError = { error ->
             promise.reject("ERR_AUTH_FAILED", error, null)
@@ -249,17 +380,6 @@ class SecureSigningModule : Module() {
           }
         )
       }
-    }
-
-    Function("verify") { alias: String, data: String, signature: String ->
-      val entry = getKeyStoreEntry(alias)
-      if (entry !is KeyStore.PrivateKeyEntry) return@Function null
-      
-      val valid: Boolean = Signature.getInstance("SHA256withECDSA").apply {
-        initVerify(entry.certificate)
-        update(data.toByteArray(Charsets.UTF_8))
-      }.verify(Base64.decode(signature, Base64.NO_WRAP))
-      return@Function true
     }
   }
 }

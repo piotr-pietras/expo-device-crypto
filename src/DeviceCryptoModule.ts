@@ -7,7 +7,12 @@ import {
   GetPublicKeyOptions,
   AuthMethod,
   SignOptions,
-} from "./SecureSigning.types";
+  DecryptOptions,
+  VerifyOptions,
+  SigningAlgorithm,
+  EncryptOptions,
+  EncryptionAlgorithm,
+} from "./DeviceCrypto.types";
 
 function base64ToPem(base64: string, label = "DATA") {
   const normalized = base64.replace(/\s+/g, "");
@@ -16,21 +21,24 @@ function base64ToPem(base64: string, label = "DATA") {
   return `-----BEGIN ${label}-----\n${wrapped}\n-----END ${label}-----\n`;
 }
 
-declare class SecureSigningModule extends NativeModule {
+declare class DeviceCryptoModule extends NativeModule {
   isAuthCheckAvailable(): AuthCheckResult;
   generateKeyPair(alias: string, o: any): GenerateKeyPairResult;
   getPublicKey(alias: string): string | null;
   removeKeyPair(alias: string): boolean;
   aliases(): string[];
-  sign(
+  sign(alias: string, data: string, o: any): Promise<string | null>;
+  verify(
     alias: string,
     data: string,
-    o: any,
-  ): Promise<string | null>;
-  verify(alias: string, data: string, signature: string): boolean | null;
+    signature: string,
+    o: any
+  ): boolean | null;
+  encrypt(alias: string, data: string, o: any): Promise<string | null>;
+  decrypt(alias: string, data: string, o: any): Promise<string | null>;
 }
 
-const module = requireNativeModule<SecureSigningModule>("SecureSigning");
+const module = requireNativeModule<DeviceCryptoModule>("DeviceCrypto");
 
 export default {
   /**
@@ -45,6 +53,7 @@ export default {
    */
   generateKeyPair: async (alias: string, options?: GenerateKeyPairOptions) => {
     const o = {
+      algoType: options?.algorithmType,
       reqAuth: options?.requireAuthentication ?? false,
       authMethod: options?.authMethod ?? AuthMethod.PASSCODE_OR_BIOMETRIC,
     };
@@ -80,6 +89,12 @@ export default {
    * @param alias - The alias to use for the key pair.
    * @param data - The data to sign.
    * @param options - The options for the operation.
+   * @default { 
+   *  algoType: SigningAlgorithm.ECDSA_SHA256, 
+   *  promptTitle: "Unlock", 
+   *  promptSubtitle: "Enter your PIN to continue", 
+   *  authMethod: AuthMethod.PASSCODE_OR_BIOMETRIC 
+   * }
    * @returns The signature.
    */
   sign: async (alias: string, data: string, options?: SignOptions) => {
@@ -87,6 +102,7 @@ export default {
       title: options?.promptTitle ?? "Unlock",
       subtitle: options?.promptSubtitle ?? "Enter your PIN to continue",
       authMethod: options?.authMethod ?? AuthMethod.PASSCODE_OR_BIOMETRIC,
+      algoType: options?.algorithmType ?? SigningAlgorithm.ECDSA_SHA256,
     };
     return module.sign(alias, data, o);
   },
@@ -95,9 +111,61 @@ export default {
    * @param alias - The alias to use for the key pair.
    * @param data - The data to verify.
    * @param signature - The signature to verify.
+   * @param options - The options for the operation.
+   * @default { 
+   *  algoType: SigningAlgorithm.ECDSA_SHA256, 
+   * }
    * @returns True if the signature is valid, false otherwise.
    */
-  verify: module.verify,
+  verify: async (
+    alias: string,
+    data: string,
+    signature: string,
+    options?: VerifyOptions
+  ) => {
+    const o = {
+      algoType: options?.algorithmType ?? SigningAlgorithm.ECDSA_SHA256,
+    };
+    return module.verify(alias, data, signature, o);
+  },
+  /**
+   * Signs the given data with the private key for the given alias.
+   * @param alias - The alias to use for the key pair.
+   * @param data - The data to sign.
+   * @param options - The options for the operation.
+   * @default { 
+   *  algoType: EncryptionAlgorithm.RSA_2048_PKCS1, 
+   * }
+   * @returns The signature.
+   */
+  encrypt: async (alias: string, data: string, options?: EncryptOptions) => {
+    const o = {
+      algoType: options?.algorithmType ?? EncryptionAlgorithm.RSA_2048_PKCS1,
+    };
+    return module.encrypt(alias, data, o);
+  },
+  /**
+   * Decrypts the given data with the private key for the given alias.
+   * @param alias - The alias to use for the key pair.
+   * @param data - The data to decrypt.
+   * @param options - The options for the operation.
+   * @default { 
+   *  algoType: EncryptionAlgorithm.RSA_2048_PKCS1, 
+   *  promptTitle: "Unlock", 
+   *  promptSubtitle: "Enter your PIN to continue", 
+   *  authMethod: AuthMethod.PASSCODE_OR_BIOMETRIC 
+   * }
+   * @returns The decrypted data.
+   */
+  decrypt: async (alias: string, data: string, options?: DecryptOptions) => {
+    const o = {
+      title: options?.promptTitle ?? "Unlock",
+      subtitle: options?.promptSubtitle ?? "Enter your PIN to continue",
+      authMethod: options?.authMethod ?? AuthMethod.PASSCODE_OR_BIOMETRIC,
+      algoType: options?.algorithmType ?? EncryptionAlgorithm.RSA_2048_PKCS1,
+    };
+    return module.decrypt(alias, data, o);
+  },
 };
 
 export type { GenerateKeyPairResult };

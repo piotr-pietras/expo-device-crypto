@@ -1,7 +1,7 @@
 {
-  "name": "expo-secure-signing",
-  "version": "0.4.1",
-  "description": "Secure signing for Expo using device hardware capabilities",
+  "name": "expo-device-crypto",
+  "version": "0.0.0",
+  "description": "Crypto for Expo using device hardware capabilities",
   "main": "build/index.js",
   "types": "build/index.d.ts",
   "scripts": {
@@ -18,23 +18,22 @@
   "keywords": [
     "react-native",
     "expo",
-    "secure-signing",
-    "signature",
-    "ecdsa",
-    "p256",
+    "device-crypto",
+    "crypto",
     "android-keystore",
     "secure-enclave",
-    "hardware-backed",
-    "keychain",
-    "keystore"
+    "ecdsa",
+    "rsa",
+    "rsa-pkcs1",
+    "hardware-backed"
   ],
-  "repository": "https://github.com/piotr-pietras/expo-secure-signing",
+  "repository": "https://github.com/piotr-pietras/expo-device-crypto",
   "bugs": {
-    "url": "https://github.com/piotr-pietras/expo-secure-signing/issues"
+    "url": "https://github.com/piotr-pietras/expo-device-crypto/issues"
   },
   "author": "Piotr <pietraspiotr94@gmail.com> (https://github.com/piotr-pietras)",
   "license": "MIT",
-  "homepage": "https://github.com/piotr-pietras/expo-secure-signing#readme",
+  "homepage": "https://github.com/piotr-pietras/expo-device-crypto#readme",
   "dependencies": {},
   "devDependencies": {
     "expo-module-scripts": "55.0.2"

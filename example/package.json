@@ -1,5 +1,5 @@
 {
-  "name": "expo-secure-signing-example",
+  "name": "expo-device-crypto-example",
   "version": "1.0.0",
   "main": "index.ts",
   "scripts": {

@@ -1,4 +1,9 @@
-import SecureSigning, { AuthCheckResult, AuthMethod } from "expo-secure-signing";
+import DeviceCrypto, {
+  AuthCheckResult,
+  AuthMethod,
+  SigningAlgorithm,
+  EncryptionAlgorithm,
+} from "expo-device-crypto";
 import { useState } from "react";
 import {
   Button,
@@ -6,21 +11,30 @@ import {
   Switch,
   Text,
   TextInput,
+  TouchableHighlight,
   View,
+  Clipboard,
+  TouchableOpacity,
 } from "react-native";
 
 export default function TestScreen() {
   const [authCheckAvailable, setAuthCheckAvailable] = useState<string>("");
   const [requireAuthentication, setRequireAuthentication] =
     useState<boolean>(false);
+  const [removedCount, setRemovedCount] = useState<number>(0);
   const [alias, setAlias] = useState<string>("key-pair-alias");
   const [generated, setGenerated] = useState<string>("");
   const [textToSign, setTextToSign] = useState<string>("text to sign");
-  const [removeAlias, setRemoveAlias] = useState<string>("Test");
   const [signature, setSignature] = useState<string>("");
   const [verified, setVerified] = useState<boolean>(false);
-  const [retrieveAlias, setRetrieveAlias] = useState<string>("key-pair-alias");
+  const [algoType, setAlgoType] = useState<
+    SigningAlgorithm | EncryptionAlgorithm
+  >(SigningAlgorithm.ECDSA_SHA256);
+  const [publicKeyFormat, setPublicKeyFormat] = useState<"DER" | "PEM">("DER");
   const [retrievedPublicKey, setRetrievedPublicKey] = useState<string>("");
+  const [textToEncrypt, setTextToEncrypt] = useState<string>("text to encrypt");
+  const [encrypted, setEncrypted] = useState<string>("");
+  const [decrypted, setDecrypted] = useState<string>("");
 
   return (
     <ScrollView style={styles.container}>
@@ -37,17 +51,33 @@ export default function TestScreen() {
         </Text>
         <Button
           onPress={() =>
-            setAuthCheckAvailable(SecureSigning.isAuthCheckAvailable())
+            setAuthCheckAvailable(DeviceCrypto.isAuthCheckAvailable())
           }
           title="Auth Check Available"
         />
       </Group>
       <Group name="Generate Key Pair (should return public key)">
-        <View>
+        {DeviceCrypto.aliases().map((alias) => (
+          <Text key={alias}>{alias}</Text>
+        ))}
+        <View style={styles.inline}>
           <Text>Require Authentication</Text>
           <Switch
             value={requireAuthentication}
             onValueChange={setRequireAuthentication}
+          />
+        </View>
+        <View style={styles.inline}>
+          <Text>Key Type: {algoType}</Text>
+          <Switch
+            value={algoType === SigningAlgorithm.ECDSA_SHA256}
+            onValueChange={() =>
+              setAlgoType(
+                algoType === SigningAlgorithm.ECDSA_SHA256
+                  ? EncryptionAlgorithm.RSA_2048_PKCS1
+                  : SigningAlgorithm.ECDSA_SHA256
+              )
+            }
           />
         </View>
         <TextInput
@@ -57,55 +87,55 @@ export default function TestScreen() {
           onChangeText={setAlias}
         />
         <Button
+          onPress={() => {
+            DeviceCrypto.removeKeyPair(alias);
+            setRemovedCount(removedCount + 1);
+          }}
+          title="Remove Key Pair"
+        />
+        <Button
           onPress={() =>
-            SecureSigning.generateKeyPair(alias, {
+            DeviceCrypto.generateKeyPair(alias, {
               requireAuthentication,
+              algorithmType: algoType,
             })
               .then((result) => {
                 setGenerated(result);
+              })
+              .catch((error) => {
+                console.error(error);
               })
           }
           title="Create Keys"
         />
         <Text style={{ color: generated ? "green" : "red" }}>{generated}</Text>
-      </Group>
-      <Group name="Aliases list of all key pairs in the keystore">
-        {SecureSigning.aliases().map((alias: string) => (
-          <Text key={alias}>{alias}</Text>
-        ))}
-      </Group>
-      <Group name="Remove Key Pair">
-        <TextInput
-          style={styles.input}
-          placeholder="Enter alias to remove"
-          value={removeAlias}
-          onChangeText={setRemoveAlias}
-        />
-        <Button
-          onPress={() => {
-            SecureSigning.removeKeyPair(removeAlias);
-          }}
-          title="Remove Key Pair"
-        />
-      </Group>
-      <Group name="Get Public Key">
-        <TextInput
-          style={styles.input}
-          placeholder="Enter alias to retrieve public key"
-          value={retrieveAlias}
-          onChangeText={setRetrieveAlias}
-        />
+
+        <View style={styles.inline}>
+          <Text>Public Key Format: {publicKeyFormat}</Text>
+          <Switch
+            value={publicKeyFormat === "PEM"}
+            onValueChange={() =>
+              setPublicKeyFormat(publicKeyFormat === "PEM" ? "DER" : "PEM")
+            }
+          />
+        </View>
         <Button
           onPress={() =>
             setRetrievedPublicKey(
-              SecureSigning.getPublicKey(retrieveAlias, {
-                format: "PEM",
+              DeviceCrypto.getPublicKey(alias, {
+                format: publicKeyFormat,
               }) ?? ""
             )
           }
           title="Get Public Key"
         />
-        <Text>{retrievedPublicKey}</Text>
+        <TouchableOpacity
+          onPress={() => {
+            Clipboard.setString(retrievedPublicKey);
+          }}
+        >
+          <Text>{retrievedPublicKey}</Text>
+        </TouchableOpacity>
       </Group>
       <Group name="Sign and verify">
         <TextInput
@@ -116,7 +146,7 @@ export default function TestScreen() {
         />
         <Button
           onPress={() => {
-            SecureSigning.sign(alias, textToSign, {
+            DeviceCrypto.sign(alias, textToSign, {
               authMethod: AuthMethod.PASSCODE_OR_BIOMETRIC,
               promptTitle: "TEST",
               promptSubtitle: "TEST",
@@ -138,31 +168,72 @@ export default function TestScreen() {
           value={signature}
           onChangeText={setSignature}
         />
-        {signature && (
-          <>
-            {/* <Button
-              onPress={() => {
-                console.info({});
-
-                try {
-                  const verified = SecureSigning.verify(
-                    alias,
-                    textToSign,
-                    signature
-                  );
-                  setVerified(verified ?? false);
-                } catch (error) {
-                  console.error(error);
-                  setVerified(false);
-                }
-              }}
-              title="Verify"
-            />
-            <Text style={{ color: verified ? "green" : "red" }}>
-              {verified ? "Signature verified" : "Signature not verified!"}
-            </Text> */}
-          </>
-        )}
+        <Button
+          onPress={() => {
+            try {
+              const verified = DeviceCrypto.verify(
+                alias,
+                textToSign,
+                signature
+              );
+              setVerified(verified ?? false);
+            } catch (error) {
+              console.error(error);
+              setVerified(false);
+            }
+          }}
+          title="Verify"
+        />
+        <Text style={{ color: verified ? "green" : "red" }}>
+          {verified ? "Signature verified" : "Signature not verified!"}
+        </Text>
+      </Group>
+      <Group name="Encrypt and decrypt">
+        <TextInput
+          style={styles.input}
+          placeholder="Enter text to encrypt"
+          value={textToEncrypt}
+          onChangeText={setTextToEncrypt}
+        />
+        <Button
+          onPress={() => {
+            DeviceCrypto.encrypt(alias, textToEncrypt)
+              .then((result) => {
+                setEncrypted(result ?? "");
+              })
+              .catch((error) => {
+                console.error(error);
+              });
+          }}
+          title="Encrypt"
+        />
+        <TextInput
+          style={[styles.input, { height: 150 }]}
+          placeholder="Encrypted text"
+          value={encrypted}
+          onChangeText={setEncrypted}
+          multiline={true}
+          numberOfLines={4}
+        />
+        <Button
+          onPress={() => {
+            DeviceCrypto.decrypt(alias, encrypted)
+              .then((result) => {
+                setDecrypted(result ?? "");
+              })
+              .catch((error) => {
+                console.error(error);
+              });
+          }}
+          title="Decrypt"
+        />
+        <TouchableOpacity
+          onPress={() => {
+            Clipboard.setString(decrypted);
+          }}
+        >
+          <Text>{decrypted}</Text>
+        </TouchableOpacity>
       </Group>
     </ScrollView>
   );
@@ -197,5 +268,10 @@ const styles = {
   container: {
     flex: 1,
     backgroundColor: "#eee",
+  },
+  inline: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
   },
 };

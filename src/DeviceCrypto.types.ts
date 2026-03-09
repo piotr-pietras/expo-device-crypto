@@ -15,7 +15,19 @@ export enum AuthMethod {
   PASSCODE_OR_BIOMETRIC = "PASSCODE_OR_BIOMETRIC",
 }
 
+export enum SigningAlgorithm {
+  ECDSA_SHA256 = "ECDSA_SHA256",
+}
+
+export enum EncryptionAlgorithm {
+  RSA_2048_PKCS1 = "RSA_2048_PKCS1",
+}
+
 export interface GenerateKeyPairOptions {
+  /**
+   * The algorithm type of the key to generate.
+   */
+  algorithmType: SigningAlgorithm | EncryptionAlgorithm;
   /**
    * Whether to require authentication to sign.
    * Setting this to true will prompt biometric or passcode authentication before signing.
@@ -28,7 +40,7 @@ export interface GenerateKeyPairOptions {
   /**
    * The method of authentication to use.
    * Note that on Android you have to define it when signing.
-   * 
+   *
    * If you want to allow to use Face ID, you need to add the following to your app.json config file:
    * ```json
    * "ios": {
@@ -43,7 +55,7 @@ export interface GenerateKeyPairOptions {
   authMethod?: AuthMethod;
 }
 
-export interface SignOptions {
+interface BaseSignDecryptOptions {
   /**
    * The title of the prompt to show when authentication is required.
    * @default "Unlock"
@@ -64,6 +76,27 @@ export interface SignOptions {
    */
   authMethod?: AuthMethod;
 }
+
+interface BaseSigningOptions {
+  /**
+   * The algorithm type of the key to use for signing.
+   */
+  algorithmType?: SigningAlgorithm;
+}
+
+interface BaseEncryptionOptions {
+  /**
+   * The algorithm type of the key to use for encrypting.
+   */
+  algorithmType?: EncryptionAlgorithm;
+}
+
+export interface SignOptions extends BaseSignDecryptOptions, BaseSigningOptions {}
+export interface VerifyOptions extends BaseSigningOptions {}
+
+export interface DecryptOptions extends BaseSignDecryptOptions, BaseEncryptionOptions {}
+export interface EncryptOptions extends BaseEncryptionOptions {}
+
 export interface GetPublicKeyOptions {
   /**
    * The format of the public key to return.

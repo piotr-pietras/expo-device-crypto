@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "expo-secure-signing-example",
-    "slug": "expo-secure-signing-example",
+    "name": "expo-device-crypto-example",
+    "slug": "expo-device-crypto-example",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -14,7 +14,7 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "expo.modules.securesigning.example",
+      "bundleIdentifier": "expo.modules.devicecrypto.example",
       "infoPlist": {
         "NSFaceIDUsageDescription": "We use Face ID to secure your data."
       }
@@ -26,7 +26,7 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "expo.modules.securesigning.example"
+      "package": "expo.modules.devicecrypto.example"
     }
   }
 }

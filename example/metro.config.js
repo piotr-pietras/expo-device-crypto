@@ -19,7 +19,7 @@ config.resolver.nodeModulesPaths = [
 ];
 
 config.resolver.extraNodeModules = {
-  'expo-secure-signing': '..',
+  'expo-device-crypto': '..',
 };
 
 config.watchFolders = [path.resolve(__dirname, '..')];

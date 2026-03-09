@@ -6,7 +6,7 @@ module.exports = async (env, argv) => {
     {
       ...env,
       babel: {
-        dangerouslyAddModulePathsToTranspile: ['crypto-hardware'],
+        dangerouslyAddModulePathsToTranspile: ['expo-device-crypto'],
       },
     },
     argv
