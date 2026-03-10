@@ -53,6 +53,53 @@ public class DeviceCryptoModule: Module {
     return prefix + raw
   }
 
+  // Converts PKCS#1 RSA public key bytes to SPKI DER format.
+  private func rsaPKCS1ToSPKI(_ publicKey: SecKey) -> Data? {
+    guard let pkcs1 = SecKeyCopyExternalRepresentation(publicKey, nil) as Data? else {
+      return nil
+    }
+
+    // rsaEncryption OID: 1.2.840.113549.1.1.1 with NULL params
+    let algorithmIdentifier = Data([
+      0x30, 0x0D,
+      0x06, 0x09, 0x2A, 0x86, 0x48, 0x86, 0xF7, 0x0D, 0x01, 0x01, 0x01,
+      0x05, 0x00
+    ])
+
+    let bitStringPayload = Data([0x00]) + pkcs1
+    guard let bitString = asn1Wrap(tag: 0x03, content: bitStringPayload) else {
+      return nil
+    }
+
+    return asn1Wrap(tag: 0x30, content: algorithmIdentifier + bitString)
+  }
+
+  private func asn1Wrap(tag: UInt8, content: Data) -> Data? {
+    guard let length = asn1Length(content.count) else {
+      return nil
+    }
+    return Data([tag]) + length + content
+  }
+
+  private func asn1Length(_ length: Int) -> Data? {
+    if length < 0x80 {
+      return Data([UInt8(length)])
+    }
+
+    var value = length
+    var bytes: [UInt8] = []
+    while value > 0 {
+      bytes.insert(UInt8(value & 0xff), at: 0)
+      value >>= 8
+    }
+
+    guard bytes.count <= 4 else {
+      return nil
+    }
+
+    return Data([0x80 | UInt8(bytes.count)]) + Data(bytes)
+  }
+
   private func isAuthCheckAvailable() -> String {
     let context = LAContext()
     let available = context.canEvaluatePolicy(.deviceOwnerAuthentication, error: nil)
@@ -103,15 +150,25 @@ public class DeviceCryptoModule: Module {
   private func retrievePublicKey(_ secKey: SecKey) -> String? {
     let publicKey = SecKeyCopyPublicKey(secKey)!
 
-    let attrs = SecKeyCopyAttributes(secKey)!
-    if attrs == kSecAttrKeyTypeECSECPrimeRandom {
-      return x962ECPointToP256SPKI(publicKey)?.base64EncodedString()
-    } else {
-      guard let publicKeyData = SecKeyCopyExternalRepresentation(publicKey, nil) as Data? else {
-        return nil
-      }
-      return publicKeyData.base64EncodedString()
+    guard
+      let attrs = SecKeyCopyAttributes(publicKey) as? [String: Any],
+      let keyType = attrs[kSecAttrKeyType as String] as? String
+    else {
+      return nil
     }
+
+    if keyType == (kSecAttrKeyTypeECSECPrimeRandom as String) {
+      return x962ECPointToP256SPKI(publicKey)?.base64EncodedString()
+    }
+
+    if keyType == (kSecAttrKeyTypeRSA as String) {
+      return rsaPKCS1ToSPKI(publicKey)?.base64EncodedString()
+    }
+
+    guard let publicKeyData = SecKeyCopyExternalRepresentation(publicKey, nil) as Data? else {
+      return nil
+    }
+    return publicKeyData.base64EncodedString()
   }
 
   private func removeKeyStoreEntry(_ alias: String) -> Bool {
