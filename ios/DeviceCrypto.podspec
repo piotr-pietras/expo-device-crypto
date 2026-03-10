@@ -1,8 +1,8 @@
 Pod::Spec.new do |s|
-  s.name           = 'SecureSigning'
-  s.version        = '0.4.1'
-  s.summary        = 'Secure signing'
-  s.description    = 'Secure signing for Expo using device hardware capabilities'
+  s.name           = 'DeviceCrypto'
+  s.version        = '0.0.0'
+  s.summary        = 'Device crypto'
+  s.description    = 'Device crypto for Expo using device hardware capabilities'
   s.author         = 'Piotr Pietras'
   s.homepage       = 'https://docs.expo.dev/modules/'
   s.platforms      = {

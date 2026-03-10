@@ -16,7 +16,7 @@ export enum AuthMethod {
 }
 
 export enum SigningAlgorithm {
-  ECDSA_SHA256 = "ECDSA_SHA256",
+  ECDSA_SECP256R1_SHA256 = "ECDSA_SECP256R1_SHA256",
 }
 
 export enum EncryptionAlgorithm {
@@ -100,7 +100,7 @@ export interface EncryptOptions extends BaseEncryptionOptions {}
 export interface GetPublicKeyOptions {
   /**
    * The format of the public key to return.
-   * @default "DER" (Base64 of DER-encoded SubjectPublicKeyInfo (SPKI) for P‑256)
+   * @default "PEM" (Base64 of PEM-encoded SubjectPublicKeyInfo (SPKI) for P‑256)
    */
-  format?: "DER" | "PEM";
+  format?: "PEM";
 }

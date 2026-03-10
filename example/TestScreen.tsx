@@ -29,7 +29,7 @@ export default function TestScreen() {
   const [verified, setVerified] = useState<boolean>(false);
   const [algoType, setAlgoType] = useState<
     SigningAlgorithm | EncryptionAlgorithm
-  >(SigningAlgorithm.ECDSA_SHA256);
+  >(SigningAlgorithm.ECDSA_SECP256R1_SHA256);
   const [publicKeyFormat, setPublicKeyFormat] = useState<"DER" | "PEM">("DER");
   const [retrievedPublicKey, setRetrievedPublicKey] = useState<string>("");
   const [textToEncrypt, setTextToEncrypt] = useState<string>("text to encrypt");
@@ -70,12 +70,12 @@ export default function TestScreen() {
         <View style={styles.inline}>
           <Text>Key Type: {algoType}</Text>
           <Switch
-            value={algoType === SigningAlgorithm.ECDSA_SHA256}
+            value={algoType === SigningAlgorithm.ECDSA_SECP256R1_SHA256}
             onValueChange={() =>
               setAlgoType(
-                algoType === SigningAlgorithm.ECDSA_SHA256
+                algoType === SigningAlgorithm.ECDSA_SECP256R1_SHA256
                   ? EncryptionAlgorithm.RSA_2048_PKCS1
-                  : SigningAlgorithm.ECDSA_SHA256
+                  : SigningAlgorithm.ECDSA_SECP256R1_SHA256
               )
             }
           />

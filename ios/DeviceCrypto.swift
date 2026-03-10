@@ -20,7 +20,21 @@ enum AuthMethod: String {
   case PASSCODE_OR_BIOMETRIC = "PASSCODE_OR_BIOMETRIC"
 }
 
-public class SecureSigningModule: Module {
+enum AlgorithmType: String {
+  case ECDSA_SECP256R1_SHA256 = "ECDSA_SECP256R1_SHA256"
+  case RSA_2048_PKCS1 = "RSA_2048_PKCS1"
+}
+
+public class DeviceCryptoModule: Module {
+  private func toiOSAlgo(algorithm: AlgorithmType) -> SecKeyAlgorithm {
+    switch algorithm {
+    case .ECDSA_SECP256R1_SHA256:
+      return .ecdsaSignatureMessageX962SHA256
+    case .RSA_2048_PKCS1:
+      return .rsaEncryptionPKCS1
+    }
+  }
+
   // Converts ANSI x962 EC point to P‑256 SPKI DER format
   private func x962ECPointToP256SPKI(_ publicKey: SecKey) -> Data? {
     var error: Unmanaged<CFError>?
@@ -53,7 +67,6 @@ public class SecureSigningModule: Module {
     let query: [String: Any] = [
       kSecClass as String: kSecClassKey,
       kSecMatchLimit as String: kSecMatchLimitAll,
-      kSecAttrKeyType as String: kSecAttrKeyTypeECSECPrimeRandom,
       kSecReturnAttributes as String: true,
     ]
 
@@ -74,7 +87,6 @@ public class SecureSigningModule: Module {
   private func getSecKeyQuery(_ alias: String) -> [String: Any] {
     return [
       kSecClass as String: kSecClassKey,
-      kSecAttrKeyType as String: kSecAttrKeyTypeECSECPrimeRandom,
       kSecAttrApplicationTag as String: alias,
       kSecReturnRef as String: true,
     ]
@@ -90,8 +102,16 @@ public class SecureSigningModule: Module {
 
   private func retrievePublicKey(_ secKey: SecKey) -> String? {
     let publicKey = SecKeyCopyPublicKey(secKey)!
-    let spkiDER = x962ECPointToP256SPKI(publicKey)!
-    return spkiDER.base64EncodedString()
+
+    let attrs = SecKeyCopyAttributes(secKey)!
+    if attrs == kSecAttrKeyTypeECSECPrimeRandom {
+      return x962ECPointToP256SPKI(publicKey)?.base64EncodedString()
+    } else {
+      guard let publicKeyData = SecKeyCopyExternalRepresentation(publicKey, nil) as Data? else {
+        return nil
+      }
+      return publicKeyData.base64EncodedString()
+    }
   }
 
   private func removeKeyStoreEntry(_ alias: String) -> Bool {
@@ -103,9 +123,80 @@ public class SecureSigningModule: Module {
     return status == errSecSuccess
   }
 
+  private func buildECDSA_SECP256R1_SHA256(alias: String, reqAuth: Bool, authMethod: AuthMethod) -> SecKey? {
+    let accessFlags: SecAccessControlCreateFlags
+    if reqAuth {
+      switch authMethod {
+        case .PASSCODE:
+          accessFlags = [.privateKeyUsage, .devicePasscode]
+        case .PASSCODE_OR_BIOMETRIC:
+          accessFlags = [.privateKeyUsage, .userPresence]
+        default:
+          accessFlags = .privateKeyUsage
+      }
+    } else {
+      accessFlags = .privateKeyUsage
+    }
+
+    let access = SecAccessControlCreateWithFlags(
+      kCFAllocatorDefault,
+      kSecAttrAccessibleWhenUnlockedThisDeviceOnly,
+      accessFlags,
+      nil
+    ) 
+
+    let attributes: NSDictionary = [
+      kSecAttrKeyType: kSecAttrKeyTypeECSECPrimeRandom,
+      kSecAttrKeySizeInBits: 256,
+      kSecAttrTokenID: kSecAttrTokenIDSecureEnclave,
+      kSecPrivateKeyAttrs: [
+          kSecAttrIsPermanent: true,
+          kSecAttrApplicationTag: alias,
+          kSecAttrAccessControl: access
+      ]
+    ]
+
+    return SecKeyCreateRandomKey(attributes, nil)
+  }
+
+  private func buildRSA_2048_PKCS1(alias: String, reqAuth: Bool, authMethod: AuthMethod) -> SecKey? {
+    let accessFlags: SecAccessControlCreateFlags
+    if reqAuth {
+      switch authMethod {
+        case .PASSCODE:
+          accessFlags = [.devicePasscode]
+        case .PASSCODE_OR_BIOMETRIC:
+          accessFlags = [.userPresence]
+        default:
+          accessFlags = []
+      }
+    } else {
+      accessFlags = []
+    }
+
+    let access = SecAccessControlCreateWithFlags(
+      kCFAllocatorDefault,
+      kSecAttrAccessibleWhenUnlockedThisDeviceOnly,
+      accessFlags,
+      nil
+    ) 
+
+    let attributes: NSDictionary = [
+      kSecAttrKeyType: kSecAttrKeyTypeRSA,
+      kSecAttrKeySizeInBits: 2048,
+      kSecPrivateKeyAttrs: [
+          kSecAttrIsPermanent: true,
+          kSecAttrApplicationTag: alias,
+          kSecAttrAccessControl: access
+      ]
+    ]
+
+    return SecKeyCreateRandomKey(attributes, nil)
+  }
+
   public func definition() -> ModuleDefinition {
 
-    Name("SecureSigning")
+    Name("DeviceCrypto")
 
     Function("isAuthCheckAvailable") { () -> String in
       return self.isAuthCheckAvailable()
@@ -114,10 +205,11 @@ public class SecureSigningModule: Module {
     Function("generateKeyPair") { (alias: String, o: [String: Any]) -> String in
       let reqAuth = o["reqAuth"] as! Bool
       let authMethod = AuthMethod(rawValue: o["authMethod"] as! String)
+      let algoType = AlgorithmType(rawValue: o["algoType"] as! String)
 
       if reqAuth && self.isAuthCheckAvailable() != AuthCheckResult.AVAILABLE.rawValue {
         throw NSError(
-          domain: "SecureSigning",
+          domain: "DeviceCrypto",
           code: 1,
           userInfo: [NSLocalizedDescriptionKey: "NO_AUTH_AVAILABLE"]
         )
@@ -128,41 +220,19 @@ public class SecureSigningModule: Module {
         return SecureSigningModuleResult.KEY_PAIR_ALREADY_EXISTS.rawValue
       }
 
-      let accessFlags: SecAccessControlCreateFlags
-      if reqAuth {
-        switch authMethod {
-          case .PASSCODE:
-            accessFlags = [.privateKeyUsage, .devicePasscode]
-          case .PASSCODE_OR_BIOMETRIC:
-            accessFlags = [.privateKeyUsage, .userPresence]
-          default:
-            accessFlags = .privateKeyUsage
-        }
-      } else {
-        accessFlags = .privateKeyUsage
+      switch algoType {
+        case .ECDSA_SECP256R1_SHA256:
+          self.buildECDSA_SECP256R1_SHA256(alias: alias, reqAuth: reqAuth, authMethod: authMethod!)
+        case .RSA_2048_PKCS1:
+          self.buildRSA_2048_PKCS1(alias: alias, reqAuth: reqAuth, authMethod: authMethod!)
+        default:
+          throw NSError(
+            domain: "DeviceCrypto",
+            code: 1,
+            userInfo: [NSLocalizedDescriptionKey: "INVALID_ALGORITHM_TYPE"]
+          )
       }
 
-      guard let access = SecAccessControlCreateWithFlags(
-        kCFAllocatorDefault,
-        kSecAttrAccessibleWhenUnlocked,
-        accessFlags,
-        nil
-      ) else {
-        return SecureSigningModuleResult.NOT_AVAILABLE.rawValue
-      }
-
-      let attributes: NSDictionary = [
-        kSecAttrKeyType: kSecAttrKeyTypeECSECPrimeRandom,
-        kSecAttrKeySizeInBits: 256,
-        kSecAttrTokenID: kSecAttrTokenIDSecureEnclave,
-        kSecPrivateKeyAttrs: [
-            kSecAttrIsPermanent: true,
-            kSecAttrApplicationTag: alias,
-            kSecAttrAccessControl: access
-        ]
-      ]
-
-      SecKeyCreateRandomKey(attributes, nil)
       return SecureSigningModuleResult.KEY_PAIR_GENERATED.rawValue
     }
 
@@ -184,10 +254,13 @@ public class SecureSigningModule: Module {
       let secKey = self.getSecKeyByAlias(alias)
       guard let secKey else { return nil }
 
+      let algoType = AlgorithmType(rawValue: o["algoType"] as! String)
+      let algo = self.toiOSAlgo(algorithm: algoType!)
+
       var signingError: Unmanaged<CFError>?
       let signatureCF = SecKeyCreateSignature(
         secKey,
-        .ecdsaSignatureMessageX962SHA256,
+        algo,
         Data(data.utf8) as CFData,
         &signingError
       )
@@ -201,21 +274,64 @@ public class SecureSigningModule: Module {
       return signature.base64EncodedString()
     }
 
-    Function("verify") { (alias: String, data: String, signature: String) -> Bool? in
+    Function("verify") { (alias: String, data: String, signature: String, o: [String: Any]) -> Bool? in
       let secKey = self.getSecKeyByAlias(alias)
       guard let secKey else { return nil }
 
       guard let publicKey = SecKeyCopyPublicKey(secKey) else { return nil }
       guard let signatureData = Data(base64Encoded: signature) else { return nil }
 
+      let algoType = AlgorithmType(rawValue: o["algoType"] as! String)
+      let algo = self.toiOSAlgo(algorithm: algoType!)
+
       let valid = SecKeyVerifySignature(
         publicKey,
-        .ecdsaSignatureMessageX962SHA256,
+        algo,
         Data(data.utf8) as CFData,
         signatureData as CFData,
         nil
       )
       return valid
+    }
+
+    AsyncFunction("encrypt") { (alias: String, data: String, o: [String: Any]) -> String? in
+      let secKey = self.getSecKeyByAlias(alias)
+      guard let secKey else { return nil }
+      let publicKey = SecKeyCopyPublicKey(secKey)!
+
+      let algoType = AlgorithmType(rawValue: o["algoType"] as! String)
+      let algo = self.toiOSAlgo(algorithm: algoType!)
+
+      guard let encrypted = SecKeyCreateEncryptedData(
+        publicKey,
+        algo,
+        Data(data.utf8) as CFData,
+        nil
+      ) as Data? else {
+        return nil
+      }
+
+      return encrypted.base64EncodedString()
+    }
+
+    AsyncFunction("decrypt") { (alias: String, data: String, o: [String: Any]) -> String? in
+      let secKey = self.getSecKeyByAlias(alias)
+      guard let secKey else { return nil }
+      guard let encryptedData = Data(base64Encoded: data) else { return nil }
+
+      let algoType = AlgorithmType(rawValue: o["algoType"] as! String)
+      let algo = self.toiOSAlgo(algorithm: algoType!)
+
+      guard let decrypted = SecKeyCreateDecryptedData(
+        secKey,
+        algo,
+        encryptedData as CFData,
+        nil
+      ) as Data? else {
+        return nil
+      }
+
+      return String(data: decrypted, encoding: .utf8)
     }
   }
 }

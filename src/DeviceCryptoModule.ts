@@ -71,7 +71,7 @@ export default {
     if (options?.format === "PEM") {
       return base64ToPem(publicKey, "PUBLIC KEY");
     }
-    return publicKey;
+    return base64ToPem(publicKey, "PUBLIC KEY");
   },
   /**
    * Removes the key pair for the given alias.
@@ -102,7 +102,7 @@ export default {
       title: options?.promptTitle ?? "Unlock",
       subtitle: options?.promptSubtitle ?? "Enter your PIN to continue",
       authMethod: options?.authMethod ?? AuthMethod.PASSCODE_OR_BIOMETRIC,
-      algoType: options?.algorithmType ?? SigningAlgorithm.ECDSA_SHA256,
+      algoType: options?.algorithmType ?? SigningAlgorithm.ECDSA_SECP256R1_SHA256,
     };
     return module.sign(alias, data, o);
   },
@@ -124,7 +124,7 @@ export default {
     options?: VerifyOptions
   ) => {
     const o = {
-      algoType: options?.algorithmType ?? SigningAlgorithm.ECDSA_SHA256,
+      algoType: options?.algorithmType ?? SigningAlgorithm.ECDSA_SECP256R1_SHA256,
     };
     return module.verify(alias, data, signature, o);
   },

@@ -40,14 +40,14 @@ enum class AuthMethod {
 }
 
 enum class AlgorithmType {
-  ECDSA_SHA256,
+  ECDSA_SECP256R1_SHA256,
   RSA_2048_PKCS1,
 }
 
 class DeviceCryptoModule : Module() {
   private fun toAndroidAlgo(algorithm: AlgorithmType): String {
     return when (algorithm) {
-      AlgorithmType.ECDSA_SHA256 -> "SHA256withECDSA"
+      AlgorithmType.ECDSA_SECP256R1_SHA256 -> "SHA256withECDSA"
       AlgorithmType.RSA_2048_PKCS1 -> "RSA/ECB/PKCS1Padding"
     }
   }
@@ -108,7 +108,7 @@ class DeviceCryptoModule : Module() {
     return true
   }
 
-  private fun buildECDSA_SHA256(alias: String, reqAuth: Boolean): KeyPairGenerator {
+  private fun buildECDSA_SECP256R1_SHA256(alias: String, reqAuth: Boolean): KeyPairGenerator {
     val kpg: KeyPairGenerator = KeyPairGenerator.getInstance(
       KeyProperties.KEY_ALGORITHM_EC,
       "AndroidKeyStore"
@@ -144,7 +144,7 @@ class DeviceCryptoModule : Module() {
       KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT
     ).run {
       setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_RSA_PKCS1)
-      setIsStrongBoxBacked(isStrongBoxAvailable())
+      setIsStrongBoxBacked(false) // TODO: Prefer strong box if available
       setUserAuthenticationRequired(reqAuth)
       if (reqAuth) {
         setUserAuthenticationParameters(
@@ -231,9 +231,9 @@ class DeviceCryptoModule : Module() {
 
       val algoType = AlgorithmType.valueOf(o["algoType"] as String)
       val kpg = when (algoType) {
-        AlgorithmType.ECDSA_SHA256 -> buildECDSA_SHA256(alias, reqAuth)
+        AlgorithmType.ECDSA_SECP256R1_SHA256 -> buildECDSA_SECP256R1_SHA256(alias, reqAuth)
         AlgorithmType.RSA_2048_PKCS1 -> buildRSA_2048_PKCS1(alias, reqAuth)
-        else -> throw Exception("INVALID_KEY_TYPE")
+        else -> throw Exception("INVALID_ALGORITHM_TYPE")
       }
 
       kpg.generateKeyPair()

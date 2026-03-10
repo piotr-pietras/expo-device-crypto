@@ -19,10 +19,13 @@
     "react-native",
     "expo",
     "device-crypto",
+    "device-cryptography",
+    "device",
     "crypto",
     "android-keystore",
     "secure-enclave",
     "ecdsa",
+    "secp256r1",
     "rsa",
     "rsa-pkcs1",
     "hardware-backed"
