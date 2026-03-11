@@ -74,7 +74,7 @@ export default function TestScreen() {
             onValueChange={() =>
               setAlgoType(
                 algoType === SigningAlgorithm.ECDSA_SECP256R1_SHA256
-                  ? EncryptionAlgorithm.RSA_2048_PKCS1
+                  ? EncryptionAlgorithm.RSA_2048_OAEP_SHA1
                   : SigningAlgorithm.ECDSA_SECP256R1_SHA256
               )
             }
@@ -197,7 +197,9 @@ export default function TestScreen() {
         />
         <Button
           onPress={() => {
-            DeviceCrypto.encrypt(alias, textToEncrypt)
+            DeviceCrypto.encrypt(alias, textToEncrypt, {
+              algorithmType: algoType as EncryptionAlgorithm,
+            })
               .then((result) => {
                 setEncrypted(result ?? "");
               })
@@ -217,7 +219,9 @@ export default function TestScreen() {
         />
         <Button
           onPress={() => {
-            DeviceCrypto.decrypt(alias, encrypted)
+            DeviceCrypto.decrypt(alias, encrypted, {
+              algorithmType: algoType as EncryptionAlgorithm,
+            })
               .then((result) => {
                 setDecrypted(result ?? "");
               })

@@ -21,6 +21,7 @@ export enum SigningAlgorithm {
 
 export enum EncryptionAlgorithm {
   RSA_2048_PKCS1 = "RSA_2048_PKCS1",
+  RSA_2048_OAEP_SHA1 = "RSA_2048_OAEP_SHA1",
 }
 
 export interface GenerateKeyPairOptions {
