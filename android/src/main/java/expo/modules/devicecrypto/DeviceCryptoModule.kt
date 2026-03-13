@@ -1,26 +1,41 @@
 package expo.modules.devicecrypto
 
+import android.content.Context
 import android.content.pm.PackageManager
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyInfo
-import android.security.keystore.KeyProperties
-import expo.modules.kotlin.modules.Module
-import expo.modules.kotlin.modules.ModuleDefinition
-import java.security.KeyPairGenerator
-import java.security.KeyStore
+import android.security.keystore.KeyProperties.AUTH_BIOMETRIC_STRONG
+import android.security.keystore.KeyProperties.AUTH_DEVICE_CREDENTIAL
+import android.security.keystore.KeyProperties.DIGEST_SHA1
+import android.security.keystore.KeyProperties.DIGEST_SHA256
+import android.security.keystore.KeyProperties.ENCRYPTION_PADDING_RSA_OAEP
+import android.security.keystore.KeyProperties.ENCRYPTION_PADDING_RSA_PKCS1
+import android.security.keystore.KeyProperties.KEY_ALGORITHM_EC
+import android.security.keystore.KeyProperties.KEY_ALGORITHM_RSA
+import android.security.keystore.KeyProperties.PURPOSE_DECRYPT
+import android.security.keystore.KeyProperties.PURPOSE_ENCRYPT
+import android.security.keystore.KeyProperties.PURPOSE_SIGN
+import android.security.keystore.KeyProperties.PURPOSE_VERIFY
 import android.util.Base64
 import androidx.biometric.BiometricManager
-import androidx.biometric.BiometricPrompt
 import androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_STRONG
 import androidx.biometric.BiometricManager.Authenticators.DEVICE_CREDENTIAL
+import androidx.biometric.BiometricPrompt
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
 import expo.modules.kotlin.Promise
-import java.security.Signature
-import android.widget.Toast
-import android.content.Context
+import expo.modules.kotlin.modules.Module
+import expo.modules.kotlin.modules.ModuleDefinition
 import java.security.KeyFactory
+import java.security.KeyPairGenerator
+import java.security.KeyStore
+import java.security.Signature
+import java.security.spec.AlgorithmParameterSpec
+import java.security.spec.MGF1ParameterSpec
 import javax.crypto.Cipher
+import javax.crypto.spec.OAEPParameterSpec
+import javax.crypto.spec.PSource
+
 
 enum class GenerateKeyPairResult {
   KEY_PAIR_GENERATED,
@@ -42,6 +57,7 @@ enum class AuthMethod {
 enum class AlgorithmType {
   ECDSA_SECP256R1_SHA256,
   RSA_2048_PKCS1,
+  RSA_2048_OAEP_SHA1,
 }
 
 class DeviceCryptoModule : Module() {
@@ -49,6 +65,19 @@ class DeviceCryptoModule : Module() {
     return when (algorithm) {
       AlgorithmType.ECDSA_SECP256R1_SHA256 -> "SHA256withECDSA"
       AlgorithmType.RSA_2048_PKCS1 -> "RSA/ECB/PKCS1Padding"
+      AlgorithmType.RSA_2048_OAEP_SHA1 -> "RSA/ECB/OAEPwithSHA-1AndMGF1Padding"
+    }
+  }
+
+  private fun getOaepSpec(algoType: AlgorithmType): AlgorithmParameterSpec? {
+    return when (algoType) {
+      AlgorithmType.RSA_2048_OAEP_SHA1 -> OAEPParameterSpec(
+        "SHA-1",
+        "MGF1",
+        MGF1ParameterSpec.SHA1,
+        PSource.PSpecified.DEFAULT
+      )
+      else -> null
     }
   }
 
@@ -108,23 +137,26 @@ class DeviceCryptoModule : Module() {
     return true
   }
 
-  private fun buildECDSA_SECP256R1_SHA256(alias: String, reqAuth: Boolean): KeyPairGenerator {
+  private fun buildECDSA(
+    alias: String, 
+    digest: String,
+    reqAuth: Boolean): KeyPairGenerator {
     val kpg: KeyPairGenerator = KeyPairGenerator.getInstance(
-      KeyProperties.KEY_ALGORITHM_EC,
+      KEY_ALGORITHM_EC,
       "AndroidKeyStore"
     )
 
     val parameterSpec: KeyGenParameterSpec = KeyGenParameterSpec.Builder(
       alias,
-      KeyProperties.PURPOSE_SIGN or KeyProperties.PURPOSE_VERIFY
+      PURPOSE_SIGN or PURPOSE_VERIFY
     ).run {
-      setDigests(KeyProperties.DIGEST_SHA256)
+      setDigests(digest)
       setIsStrongBoxBacked(false) // TODO: Prefer strong box if available
       setUserAuthenticationRequired(reqAuth)
       if (reqAuth) {
         setUserAuthenticationParameters(
           30, // 30 seconds
-          KeyProperties.AUTH_BIOMETRIC_STRONG or KeyProperties.AUTH_DEVICE_CREDENTIAL
+          AUTH_BIOMETRIC_STRONG or AUTH_DEVICE_CREDENTIAL
         )
       }
       build()
@@ -133,23 +165,30 @@ class DeviceCryptoModule : Module() {
     return kpg
   }
 
-  private fun buildRSA_2048_PKCS1(alias: String, reqAuth: Boolean): KeyPairGenerator {
+  private fun buildRSA(
+    alias: String, 
+    digest: String?,
+    padding: String,
+    reqAuth: Boolean): KeyPairGenerator {
     val kpg: KeyPairGenerator = KeyPairGenerator.getInstance(
-      KeyProperties.KEY_ALGORITHM_RSA,
+      KEY_ALGORITHM_RSA,
       "AndroidKeyStore"
     )
 
     val parameterSpec: KeyGenParameterSpec = KeyGenParameterSpec.Builder(
       alias,
-      KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT
+      PURPOSE_ENCRYPT or PURPOSE_DECRYPT
     ).run {
-      setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_RSA_PKCS1)
+      if (digest != null) {
+        setDigests(digest)
+      }
+      setEncryptionPaddings(padding)
       setIsStrongBoxBacked(false) // TODO: Prefer strong box if available
       setUserAuthenticationRequired(reqAuth)
       if (reqAuth) {
         setUserAuthenticationParameters(
           30, // 30 seconds
-          KeyProperties.AUTH_BIOMETRIC_STRONG or KeyProperties.AUTH_DEVICE_CREDENTIAL
+          AUTH_BIOMETRIC_STRONG or AUTH_DEVICE_CREDENTIAL
         )
       }
       build()
@@ -200,8 +239,8 @@ class DeviceCryptoModule : Module() {
         .setSubtitle(subtitle)
         .setAllowedAuthenticators(
           when (authMethod) {
-            AuthMethod.PASSCODE -> BiometricManager.Authenticators.DEVICE_CREDENTIAL
-            AuthMethod.PASSCODE_OR_BIOMETRIC -> BiometricManager.Authenticators.BIOMETRIC_STRONG or BiometricManager.Authenticators.DEVICE_CREDENTIAL
+            AuthMethod.PASSCODE -> DEVICE_CREDENTIAL
+            AuthMethod.PASSCODE_OR_BIOMETRIC -> BIOMETRIC_STRONG or DEVICE_CREDENTIAL
           }
         )
         .build()
@@ -231,8 +270,9 @@ class DeviceCryptoModule : Module() {
 
       val algoType = AlgorithmType.valueOf(o["algoType"] as String)
       val kpg = when (algoType) {
-        AlgorithmType.ECDSA_SECP256R1_SHA256 -> buildECDSA_SECP256R1_SHA256(alias, reqAuth)
-        AlgorithmType.RSA_2048_PKCS1 -> buildRSA_2048_PKCS1(alias, reqAuth)
+        AlgorithmType.ECDSA_SECP256R1_SHA256 -> buildECDSA(alias, DIGEST_SHA256, reqAuth)
+        AlgorithmType.RSA_2048_PKCS1 -> buildRSA(alias, null, ENCRYPTION_PADDING_RSA_PKCS1, reqAuth)
+        AlgorithmType.RSA_2048_OAEP_SHA1 -> buildRSA(alias, DIGEST_SHA1, ENCRYPTION_PADDING_RSA_OAEP, reqAuth)
         else -> throw Exception("INVALID_ALGORITHM_TYPE")
       }
 
@@ -328,9 +368,14 @@ class DeviceCryptoModule : Module() {
 
       val algoType = AlgorithmType.valueOf(o["algoType"] as String)
       val algo = toAndroidAlgo(algoType)
+      val oaepSpec = getOaepSpec(algoType)
 
       val cipher = Cipher.getInstance(algo)
-      cipher.init(Cipher.ENCRYPT_MODE, entry.certificate.publicKey)
+      if (oaepSpec != null) {
+        cipher.init(Cipher.ENCRYPT_MODE, entry.certificate.publicKey, oaepSpec)
+      } else {
+        cipher.init(Cipher.ENCRYPT_MODE, entry.certificate.publicKey)
+      }
       val encrypted: ByteArray = cipher.doFinal(data.toByteArray(Charsets.UTF_8))
       promise.resolve(Base64.encodeToString(encrypted, Base64.NO_WRAP))
     }
@@ -352,19 +397,28 @@ class DeviceCryptoModule : Module() {
       val authMethod = o["authMethod"] as String
       val algoType = AlgorithmType.valueOf(o["algoType"] as String)
       val algo = toAndroidAlgo(algoType)
+      val oaepSpec = getOaepSpec(algoType)
 
       val cipher = Cipher.getInstance(algo)
       val ciphertext = Base64.decode(data, Base64.NO_WRAP)
 
       if (!reqAuth) {
-        cipher.init(Cipher.DECRYPT_MODE, entry.privateKey)
+        if (oaepSpec != null) {
+          cipher.init(Cipher.DECRYPT_MODE, entry.privateKey, oaepSpec)
+        } else {
+          cipher.init(Cipher.DECRYPT_MODE, entry.privateKey)
+        }
         val decrypted: ByteArray = cipher.doFinal(ciphertext)
         promise.resolve(String(decrypted, Charsets.UTF_8))
         return@AsyncFunction
       } else {
         showAuthPrompt(
           onSuccess = {
-            cipher.init(Cipher.DECRYPT_MODE, entry.privateKey)
+            if (oaepSpec != null) {
+              cipher.init(Cipher.DECRYPT_MODE, entry.privateKey, oaepSpec)
+            } else {
+              cipher.init(Cipher.DECRYPT_MODE, entry.privateKey)
+            }
             val decrypted: ByteArray = cipher.doFinal(ciphertext)
             promise.resolve(String(decrypted, Charsets.UTF_8))
           },

@@ -34,7 +34,7 @@ public class DeviceCryptoModule: Module {
     case .RSA_2048_PKCS1:
       return .rsaEncryptionPKCS1
     case .RSA_2048_OAEP_SHA1:
-      return .rsaEncryptionOAEP
+      return .rsaEncryptionOAEPSHA1
     }
   }
 
@@ -294,6 +294,8 @@ public class DeviceCryptoModule: Module {
         case .ECDSA_SECP256R1_SHA256:
           self.buildECDSA(alias: alias, reqAuth: reqAuth, authMethod: authMethod!)
         case .RSA_2048_PKCS1:
+          self.buildRSA(alias: alias, reqAuth: reqAuth, authMethod: authMethod!)
+        case .RSA_2048_OAEP_SHA1:
           self.buildRSA(alias: alias, reqAuth: reqAuth, authMethod: authMethod!)
         default:
           throw NSError(
