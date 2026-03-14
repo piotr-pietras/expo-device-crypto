@@ -103,38 +103,6 @@ public class DeviceCryptoModule: Module {
     return Data([0x80 | UInt8(bytes.count)]) + Data(bytes)
   }
 
-  private func isAuthCheckAvailable() -> String {
-    let context = LAContext()
-    let available = context.canEvaluatePolicy(.deviceOwnerAuthentication, error: nil)
-    if available {
-      return AuthCheckResult.AVAILABLE.rawValue
-    } else {
-      return AuthCheckResult.UNAVAILABLE.rawValue
-    }
-  }
-
-  private func getAliases() -> [String] {
-    let query: [String: Any] = [
-      kSecClass as String: kSecClassKey,
-      kSecAttrKeyClass as String: kSecAttrKeyClassPublic,
-      kSecMatchLimit as String: kSecMatchLimitAll,
-      kSecReturnAttributes as String: true,
-    ]
-
-    var result: CFTypeRef?
-    let status = SecItemCopyMatching(query as CFDictionary, &result)
-    guard status == errSecSuccess else { return [] }
-
-    let items = (result as? [[String: Any]]) ?? []
-    return items.compactMap { attrs in
-      let tagKey = kSecAttrApplicationTag as String
-      if let tagString = attrs[tagKey] as? String {
-        return tagString
-      }
-      return nil
-    }
-  }
-
   private func getSecKeyQuery(_ alias: String, keyClass: CFString, returnRef: Bool = true) -> [String: Any] {
     var query: [String: Any] = [
       kSecClass as String: kSecClassKey,
@@ -153,40 +121,6 @@ public class DeviceCryptoModule: Module {
     let status = SecItemCopyMatching(query as CFDictionary, &item)
     guard status == errSecSuccess else { return nil }
     return (item as! SecKey)
-  }
-
-  private func retrievePublicKey(_ secKey: SecKey) -> String? {
-    let publicKey = SecKeyCopyPublicKey(secKey)!
-
-    guard
-      let attrs = SecKeyCopyAttributes(publicKey) as? [String: Any],
-      let keyType = attrs[kSecAttrKeyType as String] as? String
-    else {
-      return nil
-    }
-
-    if keyType == (kSecAttrKeyTypeECSECPrimeRandom as String) {
-      return x962ECPointToP256SPKI(publicKey)?.base64EncodedString()
-    }
-
-    if keyType == (kSecAttrKeyTypeRSA as String) {
-      return rsaPKCS1ToSPKI(publicKey)?.base64EncodedString()
-    }
-
-    guard let publicKeyData = SecKeyCopyExternalRepresentation(publicKey, nil) as Data? else {
-      return nil
-    }
-    return publicKeyData.base64EncodedString()
-  }
-
-  private func removeKeyStoreEntry(_ alias: String) -> Bool {
-    let privateQuery = self.getSecKeyQuery(alias, keyClass: kSecAttrKeyClassPrivate, returnRef: false)
-    let privateStatus = SecItemDelete(privateQuery as CFDictionary)
-
-    let publicQuery = self.getSecKeyQuery(alias, keyClass: kSecAttrKeyClassPublic, returnRef: false)
-    let publicStatus = SecItemDelete(publicQuery as CFDictionary)
-
-    return privateStatus == errSecSuccess || publicStatus == errSecSuccess
   }
 
   private func buildECDSA(alias: String, reqAuth: Bool, authMethod: AuthMethod) -> SecKey? {
@@ -264,6 +198,195 @@ public class DeviceCryptoModule: Module {
     return SecKeyCreateRandomKey(attributes, nil)
   }
 
+  private func isAuthCheckAvailable() -> String {
+    let context = LAContext()
+    let available = context.canEvaluatePolicy(.deviceOwnerAuthentication, error: nil)
+    if available {
+      return AuthCheckResult.AVAILABLE.rawValue
+    } else {
+      return AuthCheckResult.UNAVAILABLE.rawValue
+    }
+  }
+
+  private func generateKeyPair(alias: String, o: [String: Any]) throws -> String {
+    let reqAuth = o["reqAuth"] as! Bool
+    let authMethod = AuthMethod(rawValue: o["authMethod"] as! String)
+    let algoType = AlgorithmType(rawValue: o["algoType"] as! String)
+
+    if reqAuth && self.isAuthCheckAvailable() != AuthCheckResult.AVAILABLE.rawValue {
+      throw NSError(
+        domain: "DeviceCrypto",
+        code: 1,
+        userInfo: [NSLocalizedDescriptionKey: "NO_AUTH_AVAILABLE"]
+      )
+    }
+
+    let secKey = self.getSecKeyByAlias(alias, keyClass: kSecAttrKeyClassPrivate)
+    if secKey != nil {
+      return SecureSigningModuleResult.KEY_PAIR_ALREADY_EXISTS.rawValue
+    }
+
+    switch algoType {
+      case .ECDSA_SECP256R1_SHA256:
+        self.buildECDSA(alias: alias, reqAuth: reqAuth, authMethod: authMethod!)
+      case .RSA_2048_PKCS1:
+        self.buildRSA(alias: alias, reqAuth: reqAuth, authMethod: authMethod!)
+      case .RSA_2048_OAEP_SHA1:
+        self.buildRSA(alias: alias, reqAuth: reqAuth, authMethod: authMethod!)
+      default:
+        throw NSError(
+          domain: "DeviceCrypto",
+          code: 1,
+          userInfo: [NSLocalizedDescriptionKey: "INVALID_ALGORITHM_TYPE"]
+        )
+    }
+
+    return SecureSigningModuleResult.KEY_PAIR_GENERATED.rawValue
+  }
+
+  private func removeKeyStoreEntry(_ alias: String) -> Bool {
+    let privateQuery = self.getSecKeyQuery(alias, keyClass: kSecAttrKeyClassPrivate, returnRef: false)
+    let privateStatus = SecItemDelete(privateQuery as CFDictionary)
+
+    let publicQuery = self.getSecKeyQuery(alias, keyClass: kSecAttrKeyClassPublic, returnRef: false)
+    let publicStatus = SecItemDelete(publicQuery as CFDictionary)
+
+    return privateStatus == errSecSuccess || publicStatus == errSecSuccess
+  }
+
+  private func getAliases() -> [String] {
+    let query: [String: Any] = [
+      kSecClass as String: kSecClassKey,
+      kSecAttrKeyClass as String: kSecAttrKeyClassPublic,
+      kSecMatchLimit as String: kSecMatchLimitAll,
+      kSecReturnAttributes as String: true,
+    ]
+
+    var result: CFTypeRef?
+    let status = SecItemCopyMatching(query as CFDictionary, &result)
+    guard status == errSecSuccess else { return [] }
+
+    let items = (result as? [[String: Any]]) ?? []
+    return items.compactMap { attrs in
+      let tagKey = kSecAttrApplicationTag as String
+      if let tagString = attrs[tagKey] as? String {
+        return tagString
+      }
+      return nil
+    }
+  }
+
+  private func getPublicKey(alias: String) -> String? {
+    let secKey = self.getSecKeyByAlias(alias, keyClass: kSecAttrKeyClassPublic)
+    guard let secKey else { return nil }
+
+    let publicKey = SecKeyCopyPublicKey(secKey)!
+
+    guard
+      let attrs = SecKeyCopyAttributes(publicKey) as? [String: Any],
+      let keyType = attrs[kSecAttrKeyType as String] as? String
+    else {
+      return nil
+    }
+
+    if keyType == (kSecAttrKeyTypeECSECPrimeRandom as String) {
+      return x962ECPointToP256SPKI(publicKey)?.base64EncodedString()
+    }
+
+    if keyType == (kSecAttrKeyTypeRSA as String) {
+      return rsaPKCS1ToSPKI(publicKey)?.base64EncodedString()
+    }
+
+    guard let publicKeyData = SecKeyCopyExternalRepresentation(publicKey, nil) as Data? else {
+      return nil
+    }
+    return publicKeyData.base64EncodedString()
+  }
+
+  private func sign(alias: String, data: String, o: [String: Any]) throws -> String? {
+    let secKey = self.getSecKeyByAlias(alias, keyClass: kSecAttrKeyClassPrivate)
+    guard let secKey else { return nil }
+
+    let algoType = AlgorithmType(rawValue: o["algoType"] as! String)
+    let algo = self.toiOSAlgo(algorithm: algoType!)
+
+    var signingError: Unmanaged<CFError>?
+    let signatureCF = SecKeyCreateSignature(
+      secKey,
+      algo,
+      Data(data.utf8) as CFData,
+      &signingError
+    )
+
+    if let error = signingError?.takeRetainedValue() {
+      throw error as Error
+    }
+
+    guard let signatureCF else { return nil }
+    let signature = signatureCF as Data
+    return signature.base64EncodedString()
+  }
+
+  private func verify(alias: String, data: String, signature: String, o: [String: Any]) -> Bool? {
+    let secKey = self.getSecKeyByAlias(alias, keyClass: kSecAttrKeyClassPrivate)
+    guard let secKey else { return nil }
+
+    guard let publicKey = SecKeyCopyPublicKey(secKey) else { return nil }
+    guard let signatureData = Data(base64Encoded: signature) else { return nil }
+
+    let algoType = AlgorithmType(rawValue: o["algoType"] as! String)
+    let algo = self.toiOSAlgo(algorithm: algoType!)
+
+    let valid = SecKeyVerifySignature(
+      publicKey,
+      algo,
+      Data(data.utf8) as CFData,
+      signatureData as CFData,
+      nil
+    )
+    return valid
+  }
+
+  private func encrypt(alias: String, data: String, o: [String: Any]) -> String? {
+    let secKey = self.getSecKeyByAlias(alias, keyClass: kSecAttrKeyClassPublic)
+    guard let secKey else { return nil }
+    let publicKey = SecKeyCopyPublicKey(secKey)!
+
+    let algoType = AlgorithmType(rawValue: o["algoType"] as! String)
+    let algo = self.toiOSAlgo(algorithm: algoType!)
+
+    guard let encrypted = SecKeyCreateEncryptedData(
+      publicKey,
+      algo,
+      Data(data.utf8) as CFData,
+      nil
+    ) as Data? else {
+      return nil
+    }
+
+    return encrypted.base64EncodedString()
+  }
+
+  private func decrypt(alias: String, data: String, o: [String: Any]) -> String? {
+    let secKey = self.getSecKeyByAlias(alias, keyClass: kSecAttrKeyClassPrivate)
+    guard let secKey else { return nil }
+    guard let encryptedData = Data(base64Encoded: data) else { return nil }
+
+    let algoType = AlgorithmType(rawValue: o["algoType"] as! String)
+    let algo = self.toiOSAlgo(algorithm: algoType!)
+
+    guard let decrypted = SecKeyCreateDecryptedData(
+      secKey,
+      algo,
+      encryptedData as CFData,
+      nil
+    ) as Data? else {
+      return nil
+    }
+
+    return String(data: decrypted, encoding: .utf8)
+  }
+
   public func definition() -> ModuleDefinition {
 
     Name("DeviceCrypto")
@@ -273,39 +396,7 @@ public class DeviceCryptoModule: Module {
     }
 
     Function("generateKeyPair") { (alias: String, o: [String: Any]) -> String in
-      let reqAuth = o["reqAuth"] as! Bool
-      let authMethod = AuthMethod(rawValue: o["authMethod"] as! String)
-      let algoType = AlgorithmType(rawValue: o["algoType"] as! String)
-
-      if reqAuth && self.isAuthCheckAvailable() != AuthCheckResult.AVAILABLE.rawValue {
-        throw NSError(
-          domain: "DeviceCrypto",
-          code: 1,
-          userInfo: [NSLocalizedDescriptionKey: "NO_AUTH_AVAILABLE"]
-        )
-      }
-
-      let secKey = self.getSecKeyByAlias(alias, keyClass: kSecAttrKeyClassPrivate)
-      if secKey != nil {
-        return SecureSigningModuleResult.KEY_PAIR_ALREADY_EXISTS.rawValue
-      }
-
-      switch algoType {
-        case .ECDSA_SECP256R1_SHA256:
-          self.buildECDSA(alias: alias, reqAuth: reqAuth, authMethod: authMethod!)
-        case .RSA_2048_PKCS1:
-          self.buildRSA(alias: alias, reqAuth: reqAuth, authMethod: authMethod!)
-        case .RSA_2048_OAEP_SHA1:
-          self.buildRSA(alias: alias, reqAuth: reqAuth, authMethod: authMethod!)
-        default:
-          throw NSError(
-            domain: "DeviceCrypto",
-            code: 1,
-            userInfo: [NSLocalizedDescriptionKey: "INVALID_ALGORITHM_TYPE"]
-          )
-      }
-
-      return SecureSigningModuleResult.KEY_PAIR_GENERATED.rawValue
+      return try self.generateKeyPair(alias: alias, o: o)
     }
 
     Function("removeKeyPair") { (alias: String) -> Bool in
@@ -317,93 +408,23 @@ public class DeviceCryptoModule: Module {
     }
 
     Function("getPublicKey") { (alias: String) -> String? in
-      let secKey = self.getSecKeyByAlias(alias, keyClass: kSecAttrKeyClassPublic)
-      guard let secKey else { return nil }
-      return self.retrievePublicKey(secKey)
+      return self.getPublicKey(alias:alias)
     }
 
     AsyncFunction("sign") { (alias: String, data: String, o: [String: Any]) -> String? in
-      let secKey = self.getSecKeyByAlias(alias, keyClass: kSecAttrKeyClassPrivate)
-      guard let secKey else { return nil }
-
-      let algoType = AlgorithmType(rawValue: o["algoType"] as! String)
-      let algo = self.toiOSAlgo(algorithm: algoType!)
-
-      var signingError: Unmanaged<CFError>?
-      let signatureCF = SecKeyCreateSignature(
-        secKey,
-        algo,
-        Data(data.utf8) as CFData,
-        &signingError
-      )
-
-      if let error = signingError?.takeRetainedValue() {
-        throw error as Error
-      }
-
-      guard let signatureCF else { return nil }
-      let signature = signatureCF as Data
-      return signature.base64EncodedString()
+      return try self.sign(alias: alias, data: data, o: o)
     }
 
     Function("verify") { (alias: String, data: String, signature: String, o: [String: Any]) -> Bool? in
-      let secKey = self.getSecKeyByAlias(alias, keyClass: kSecAttrKeyClassPrivate)
-      guard let secKey else { return nil }
-
-      guard let publicKey = SecKeyCopyPublicKey(secKey) else { return nil }
-      guard let signatureData = Data(base64Encoded: signature) else { return nil }
-
-      let algoType = AlgorithmType(rawValue: o["algoType"] as! String)
-      let algo = self.toiOSAlgo(algorithm: algoType!)
-
-      let valid = SecKeyVerifySignature(
-        publicKey,
-        algo,
-        Data(data.utf8) as CFData,
-        signatureData as CFData,
-        nil
-      )
-      return valid
+      return self.verify(alias: alias, data: data, signature: signature, o: o)
     }
 
     AsyncFunction("encrypt") { (alias: String, data: String, o: [String: Any]) -> String? in
-      let secKey = self.getSecKeyByAlias(alias, keyClass: kSecAttrKeyClassPublic)
-      guard let secKey else { return nil }
-      let publicKey = SecKeyCopyPublicKey(secKey)!
-
-      let algoType = AlgorithmType(rawValue: o["algoType"] as! String)
-      let algo = self.toiOSAlgo(algorithm: algoType!)
-
-      guard let encrypted = SecKeyCreateEncryptedData(
-        publicKey,
-        algo,
-        Data(data.utf8) as CFData,
-        nil
-      ) as Data? else {
-        return nil
-      }
-
-      return encrypted.base64EncodedString()
+      return self.encrypt(alias: alias, data: data, o: o)
     }
 
     AsyncFunction("decrypt") { (alias: String, data: String, o: [String: Any]) -> String? in
-      let secKey = self.getSecKeyByAlias(alias, keyClass: kSecAttrKeyClassPrivate)
-      guard let secKey else { return nil }
-      guard let encryptedData = Data(base64Encoded: data) else { return nil }
-
-      let algoType = AlgorithmType(rawValue: o["algoType"] as! String)
-      let algo = self.toiOSAlgo(algorithm: algoType!)
-
-      guard let decrypted = SecKeyCreateDecryptedData(
-        secKey,
-        algo,
-        encryptedData as CFData,
-        nil
-      ) as Data? else {
-        return nil
-      }
-
-      return String(data: decrypted, encoding: .utf8)
+      return self.decrypt(alias: alias, data: data, o: o)
     }
   }
 }
