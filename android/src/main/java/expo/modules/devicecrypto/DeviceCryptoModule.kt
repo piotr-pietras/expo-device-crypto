@@ -327,7 +327,7 @@ class DeviceCryptoModule : Module() {
       initVerify(entry.certificate)
       update(data.toByteArray(Charsets.UTF_8))
     }.verify(Base64.decode(signature, Base64.NO_WRAP))
-    return true
+    return valid
   }
 
   private fun encrypt(alias: String, data: String, o: Map<String, Any?>, promise: Promise) {
