@@ -83,9 +83,8 @@ class DeviceCryptoModule : Module() {
 
   private fun isKeyStoreAvailable(): Boolean {
     val pm = appContext.reactContext?.packageManager ?: return false
-    val appAttestKeystore = pm.hasSystemFeature(PackageManager.FEATURE_KEYSTORE_APP_ATTEST_KEY)
     val hardwareKeystore = pm.hasSystemFeature(PackageManager.FEATURE_HARDWARE_KEYSTORE)
-    return appAttestKeystore || hardwareKeystore
+    return hardwareKeystore
   }
 
   private fun isStrongBoxAvailable(): Boolean {
