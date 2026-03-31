@@ -19,13 +19,15 @@ export enum SigningAlgorithm {
   ECDSA_SECP256R1_SHA256 = "ECDSA_SECP256R1_SHA256",
 }
 
+type EciesAlgorithm = "ECIES_P256_AES256_GCM";
+type RsaAlgorithm = "RSA_2048_PKCS1" | "RSA_2048_OAEP_SHA1";
 export enum EncryptionAlgorithm {
   RSA_2048_PKCS1 = "RSA_2048_PKCS1",
   RSA_2048_OAEP_SHA1 = "RSA_2048_OAEP_SHA1",
   ECIES_P256_AES256_GCM = "ECIES_P256_AES256_GCM",
 }
 
-export interface GenerateKeyPairOptions {
+export type GenerateKeyPairOptions = {
   /**
    * The algorithm type of the key to generate.
    */
@@ -63,7 +65,7 @@ export interface GenerateKeyPairOptions {
   preferStrongBox?: boolean;
 }
 
-interface BaseSignDecryptOptions {
+type BaseAuthOptions = {
   /**
    * The title of the prompt to show when authentication is required.
    * @default "Unlock"
@@ -85,29 +87,43 @@ interface BaseSignDecryptOptions {
   authMethod?: AuthMethod;
 }
 
-interface BaseSigningOptions {
+type BaseSigningOptions = {
   /**
    * The algorithm type of the key to use for signing.
    */
-  algorithmType?: SigningAlgorithm;
-}
+  algorithmType: SigningAlgorithm;
+};
+type BaseVerifyOptions = BaseSigningOptions;
 
-interface BaseEncryptionOptions {
+type BaseRsaEncryptionOptions = {
   /**
    * The algorithm type of the key to use for encrypting.
    */
-  algorithmType?: EncryptionAlgorithm;
+  algorithmType: RsaAlgorithm;
+};
+type BaseRsaDecryptionOptions = BaseRsaEncryptionOptions;
+
+type BaseEciesEncryptionOptions = {
+  /**
+   * The algorithm type of the key to use for encrypting.
+   */
+  algorithmType: EciesAlgorithm;
   /**
    * The peer public key to use for ECIES.
    */
-  peerPublicKey?: string;
-}
+  peerPublicKey: string;
+};
+type BaseEciesDecryptionOptions = BaseEciesEncryptionOptions;
 
-export interface SignOptions extends BaseSignDecryptOptions, BaseSigningOptions {}
-export interface VerifyOptions extends BaseSigningOptions {}
+export type SignOptions = BaseAuthOptions & BaseSigningOptions;
+export type VerifyOptions = BaseVerifyOptions;
 
-export interface DecryptOptions extends BaseSignDecryptOptions, BaseEncryptionOptions {}
-export interface EncryptOptions extends BaseEncryptionOptions {}
+export type DecryptOptions =
+  | (BaseAuthOptions & BaseEciesDecryptionOptions)
+  | (BaseAuthOptions & BaseRsaDecryptionOptions);
+export type EncryptOptions =
+  | (BaseAuthOptions & BaseEciesEncryptionOptions)
+  | BaseRsaEncryptionOptions;
 
 export interface GetPublicKeyOptions {
   /**

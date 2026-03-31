@@ -145,6 +145,9 @@ export default {
   encrypt: async (alias: string, data: string, options?: EncryptOptions) => {
     const o = {
       algoType: options?.algorithmType ?? EncryptionAlgorithm.RSA_2048_PKCS1,
+      title: options?.promptTitle ?? "Unlock",
+      subtitle: options?.promptSubtitle ?? "Enter your PIN to continue",
+      authMethod: options?.authMethod ?? AuthMethod.PASSCODE_OR_BIOMETRIC,
       peerPublicKey: options?.peerPublicKey ?? "",
     };
     return module.encrypt(alias, data, o);

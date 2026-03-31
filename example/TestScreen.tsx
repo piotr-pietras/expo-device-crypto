@@ -186,6 +186,7 @@ export default function TestScreen() {
         <Button
           onPress={() => {
             DeviceCrypto.sign(alias, textToSign, {
+              algorithmType: SigningAlgorithm.ECDSA_SECP256R1_SHA256,
               authMethod: AuthMethod.PASSCODE_OR_BIOMETRIC,
               promptTitle: "TEST",
               promptSubtitle: "TEST",
@@ -261,6 +262,7 @@ export default function TestScreen() {
           onPress={() => {
             DeviceCrypto.decrypt(alias, encrypted, {
               algorithmType: algoType as EncryptionAlgorithm,
+              authMethod: AuthMethod.PASSCODE_OR_BIOMETRIC,
               peerPublicKey: peerPublicKey,
             })
               .then((result) => {

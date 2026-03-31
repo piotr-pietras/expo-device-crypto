@@ -331,19 +331,6 @@ class DeviceCryptoModule : Module() {
     }
   }
 
-  // private fun retrieveSharedSecret(alias: String, publicKey: String, promise: Promise) {
-  //   val entry = getKeyStoreEntry(alias)
-  //   if (entry !is KeyStore.PrivateKeyEntry) {
-  //     promise.resolve(null)
-  //     return
-  //   }
-
-  //   val sharedSecret = deriveSharedSecret(entry, publicKey)
-
-  //   promise.resolve(Base64.encodeToString(sharedSecret, Base64.NO_WRAP))
-  // }
-
-
   private fun sign(alias: String, data: String, o: Map<String, Any?>, promise: Promise) {
     val entry = getKeyStoreEntry(alias)
     if (entry !is KeyStore.PrivateKeyEntry) {
@@ -359,21 +346,21 @@ class DeviceCryptoModule : Module() {
     val algoType = AlgorithmType.valueOf(o["algoType"] as String)
     val algo = toAndroidAlgo(algoType)
 
-    if (!reqAuth) {
+    fun runSigning() {
       val signature: ByteArray = Signature.getInstance(algo).apply {
         initSign(entry.privateKey)
         update(data.toByteArray(Charsets.UTF_8))
       }.sign()
       promise.resolve(Base64.encodeToString(signature, Base64.NO_WRAP))
+    }
+
+    if (!reqAuth) {
+      runSigning()
       return
     } else {
       showAuthPrompt(
         onSuccess = {
-          val signature: ByteArray = Signature.getInstance(algo).apply {
-            initSign(entry.privateKey)
-            update(data.toByteArray(Charsets.UTF_8))
-          }.sign()
-          promise.resolve(Base64.encodeToString(signature, Base64.NO_WRAP))
+          runSigning()
         },
         onError = { error ->
           promise.reject("AUTH_FAILED", error, null)
@@ -406,37 +393,61 @@ class DeviceCryptoModule : Module() {
       return
     }
 
+    val reqAuth = isKeyStoreRequireAuthentication(entry)
+
+    val title = o["title"] as String
+    val subtitle = o["subtitle"] as String
+    val authMethod = AuthMethod.valueOf(o["authMethod"] as String)
     val algoType = AlgorithmType.valueOf(o["algoType"] as String)
     val algo = toAndroidAlgo(algoType)
     val cipher = Cipher.getInstance(algo)
 
-    when (algoType) {
-      AlgorithmType.RSA_2048_OAEP_SHA1 -> {
-        val oaepSpec = getOaepSpec(algoType)
-        cipher.init(Cipher.ENCRYPT_MODE, entry.certificate.publicKey, oaepSpec)
-        val encrypted = cipher.doFinal(data.toByteArray(Charsets.UTF_8))
-        promise.resolve(Base64.encodeToString(encrypted, Base64.NO_WRAP))
-        return
+    fun runEncryption(cipher: Cipher) {
+      when (algoType) {
+        AlgorithmType.RSA_2048_OAEP_SHA1 -> {
+          val oaepSpec = getOaepSpec(algoType)
+          cipher.init(Cipher.ENCRYPT_MODE, entry.certificate.publicKey, oaepSpec)
+          val encrypted = cipher.doFinal(data.toByteArray(Charsets.UTF_8))
+          promise.resolve(Base64.encodeToString(encrypted, Base64.NO_WRAP))
+        }
+        AlgorithmType.RSA_2048_PKCS1 -> {
+          cipher.init(Cipher.ENCRYPT_MODE, entry.certificate.publicKey)
+          val encrypted = cipher.doFinal(data.toByteArray(Charsets.UTF_8))
+          promise.resolve(Base64.encodeToString(encrypted, Base64.NO_WRAP))
+        }
+        AlgorithmType.ECIES_P256_AES256_GCM -> {
+          val peerPublicKey = o["peerPublicKey"] as String
+          val sharedSecret = deriveSharedSecret(entry, peerPublicKey)
+          val aesKey = SecretKeySpec(sharedSecret.copyOf(32), "AES")
+          cipher.init(Cipher.ENCRYPT_MODE, aesKey)
+          val encrypted = cipher.doFinal(data.toByteArray(Charsets.UTF_8))
+          val payload = cipher.iv + encrypted
+          promise.resolve(Base64.encodeToString(payload, Base64.NO_WRAP))
+        }
+        else -> {
+          throw Exception("INVALID_ALGORITHM_TYPE")
+        }
       }
-      AlgorithmType.RSA_2048_PKCS1 -> {
-        cipher.init(Cipher.ENCRYPT_MODE, entry.certificate.publicKey)
-        val encrypted = cipher.doFinal(data.toByteArray(Charsets.UTF_8))
-        promise.resolve(Base64.encodeToString(encrypted, Base64.NO_WRAP))
-        return
-      }
-      AlgorithmType.ECIES_P256_AES256_GCM -> {
-        val peerPublicKey = o["peerPublicKey"] as String
-        val sharedSecret = deriveSharedSecret(entry, peerPublicKey)
-        val aesKey = SecretKeySpec(sharedSecret.copyOf(32), "AES")
-        cipher.init(Cipher.ENCRYPT_MODE, aesKey)
-        val encrypted = cipher.doFinal(data.toByteArray(Charsets.UTF_8))
-        val payload = cipher.iv + encrypted
-        promise.resolve(Base64.encodeToString(payload, Base64.NO_WRAP))
-        return
-      }
-      else -> {
-        throw Exception("INVALID_ALGORITHM_TYPE")
-      }
+    }
+
+    if (algoType != AlgorithmType.ECIES_P256_AES256_GCM) {
+      runEncryption(cipher)
+      return
+    } else if (!reqAuth) {
+      runEncryption(cipher)
+      return
+    } else {
+      showAuthPrompt(
+        onSuccess = {
+          runEncryption(cipher)
+        },
+        onError = { error ->
+          promise.reject("AUTH_FAILED", error, null)
+        },
+        title = title,
+        subtitle = subtitle,
+        authMethod = authMethod
+      )
     }
   }
 
