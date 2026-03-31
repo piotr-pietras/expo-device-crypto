@@ -2,6 +2,7 @@ import ExpoModulesCore
 import Security
 import Foundation
 import LocalAuthentication
+import CryptoKit
 
 enum SecureSigningModuleResult: String {
   case KEY_PAIR_GENERATED = "KEY_PAIR_GENERATED"
@@ -24,10 +25,12 @@ enum AlgorithmType: String {
   case ECDSA_SECP256R1_SHA256 = "ECDSA_SECP256R1_SHA256"
   case RSA_2048_PKCS1 = "RSA_2048_PKCS1"
   case RSA_2048_OAEP_SHA1 = "RSA_2048_OAEP_SHA1"
+  case AES_256_GCM = "AES_256_GCM"
 }
 
 public class DeviceCryptoModule: Module {
-  private func toiOSAlgo(algorithm: AlgorithmType) -> SecKeyAlgorithm {
+
+  private func toiOSAlgo(algorithm: AlgorithmType) -> SecKeyAlgorithm? {
     switch algorithm {
     case .ECDSA_SECP256R1_SHA256:
       return .ecdsaSignatureMessageX962SHA256
@@ -35,7 +38,34 @@ public class DeviceCryptoModule: Module {
       return .rsaEncryptionPKCS1
     case .RSA_2048_OAEP_SHA1:
       return .rsaEncryptionOAEPSHA1
+    case .AES_256_GCM:
+      return nil
     }
+  }
+
+  private func encryptAESGCM(key: SecKey, plaintext: Data) -> Data? {
+    guard let keyData = SecKeyCopyExternalRepresentation(key, nil) as Data? else {
+      return nil
+    }
+    let symmetricKey = SymmetricKey(data: keyData)
+    guard let sealedBox = try? AES.GCM.seal(plaintext, using: symmetricKey) else {
+      return nil
+    }
+    return sealedBox.combined
+  }
+
+  private func decryptAESGCM(key: SecKey, ciphertext: Data) -> Data? {
+    guard let keyData = SecKeyCopyExternalRepresentation(key, nil) as Data? else {
+      return nil
+    }
+    let symmetricKey = SymmetricKey(data: keyData)
+    guard
+      let sealedBox = try? AES.GCM.SealedBox(combined: ciphertext),
+      let decrypted = try? AES.GCM.open(sealedBox, using: symmetricKey)
+    else {
+      return nil
+    }
+    return decrypted
   }
 
   // Converts ANSI x962 EC point to P‑256 SPKI DER format
@@ -103,25 +133,33 @@ public class DeviceCryptoModule: Module {
     return Data([0x80 | UInt8(bytes.count)]) + Data(bytes)
   }
 
-  private func getSecKeyQuery(_ alias: String, keyClass: CFString, returnRef: Bool = true) -> [String: Any] {
+  private func getSecKeyQuery(_ alias: String, keyClass: CFString?, returnRef: Bool = true) -> [String: Any] {
     var query: [String: Any] = [
       kSecClass as String: kSecClassKey,
       kSecAttrApplicationTag as String: alias,
-      kSecAttrKeyClass as String: keyClass,
     ]
+    if let keyClass {
+      query[kSecAttrKeyClass as String] = keyClass
+    }
     if returnRef {
       query[kSecReturnRef as String] = true
     }
     return query
   }
 
-  private func getSecKeyByAlias(_ alias: String, keyClass: CFString) -> SecKey? {
+  private func getSecKeyByAlias(_ alias: String, keyClass: CFString?) -> SecKey? {
     let query: [String: Any] = self.getSecKeyQuery(alias, keyClass: keyClass)
     var item: CFTypeRef?
     let status = SecItemCopyMatching(query as CFDictionary, &item)
     guard status == errSecSuccess else { return nil }
     return (item as! SecKey)
   }
+
+  // private func hasKeyAlias(_ alias: String, keyClass: CFString?) -> Bool {
+  //   let query: [String: Any] = self.getSecKeyQuery(alias, keyClass: keyClass, returnRef: false)
+  //   let status = SecItemCopyMatching(query as CFDictionary, nil)
+  //   return status == errSecSuccess
+  // }
 
   private func buildECDSA(alias: String, reqAuth: Bool, authMethod: AuthMethod) -> SecKey? {
     let accessFlags: SecAccessControlCreateFlags
@@ -198,6 +236,38 @@ public class DeviceCryptoModule: Module {
     return SecKeyCreateRandomKey(attributes, nil)
   }
 
+  private func buildAES(alias: String, reqAuth: Bool, authMethod: AuthMethod) -> SecKey? {
+    let accessFlags: SecAccessControlCreateFlags
+    if reqAuth {
+      switch authMethod {
+        case .PASSCODE:
+          accessFlags = [.devicePasscode]
+        case .PASSCODE_OR_BIOMETRIC:
+          accessFlags = [.userPresence]
+      }
+    } else {
+      accessFlags = []
+    }
+
+    let access = SecAccessControlCreateWithFlags(
+      kCFAllocatorDefault,
+      kSecAttrAccessibleWhenUnlockedThisDeviceOnly,
+      accessFlags,
+      nil
+    )
+
+    let attributes: NSDictionary = [
+      kSecAttrKeyType: kSecAttrKeyTypeAES,
+      kSecAttrKeySizeInBits: 256,
+      kSecAttrKeyClass: kSecAttrKeyClassSymmetric,
+      kSecAttrIsPermanent: true,
+      kSecAttrApplicationTag: alias,
+      kSecAttrAccessControl: access
+    ]
+
+    return SecKeyCreateRandomKey(attributes, nil)
+  }
+
   private func isAuthCheckAvailable() -> String {
     let context = LAContext()
     let available = context.canEvaluatePolicy(.deviceOwnerAuthentication, error: nil)
@@ -221,7 +291,7 @@ public class DeviceCryptoModule: Module {
       )
     }
 
-    let secKey = self.getSecKeyByAlias(alias, keyClass: kSecAttrKeyClassPrivate)
+    let secKey = self.getSecKeyByAlias(alias, keyClass: nil)
     if secKey != nil {
       return SecureSigningModuleResult.KEY_PAIR_ALREADY_EXISTS.rawValue
     }
@@ -233,6 +303,8 @@ public class DeviceCryptoModule: Module {
         self.buildRSA(alias: alias, reqAuth: reqAuth, authMethod: authMethod!)
       case .RSA_2048_OAEP_SHA1:
         self.buildRSA(alias: alias, reqAuth: reqAuth, authMethod: authMethod!)
+      case .AES_256_GCM:
+        self.buildAES(alias: alias, reqAuth: reqAuth, authMethod: authMethod!)
       default:
         throw NSError(
           domain: "DeviceCrypto",
@@ -251,13 +323,15 @@ public class DeviceCryptoModule: Module {
     let publicQuery = self.getSecKeyQuery(alias, keyClass: kSecAttrKeyClassPublic, returnRef: false)
     let publicStatus = SecItemDelete(publicQuery as CFDictionary)
 
-    return privateStatus == errSecSuccess || publicStatus == errSecSuccess
+    let symmetricQuery = self.getSecKeyQuery(alias, keyClass: kSecAttrKeyClassSymmetric, returnRef: false)
+    let symmetricStatus = SecItemDelete(symmetricQuery as CFDictionary)
+
+    return privateStatus == errSecSuccess || publicStatus == errSecSuccess || symmetricStatus == errSecSuccess
   }
 
   private func getAliases() -> [String] {
     let query: [String: Any] = [
       kSecClass as String: kSecClassKey,
-      kSecAttrKeyClass as String: kSecAttrKeyClassPublic,
       kSecMatchLimit as String: kSecMatchLimitAll,
       kSecReturnAttributes as String: true,
     ]
@@ -267,13 +341,17 @@ public class DeviceCryptoModule: Module {
     guard status == errSecSuccess else { return [] }
 
     let items = (result as? [[String: Any]]) ?? []
-    return items.compactMap { attrs in
+    let aliases = items.compactMap { attrs -> String? in
       let tagKey = kSecAttrApplicationTag as String
       if let tagString = attrs[tagKey] as? String {
         return tagString
       }
+      // if let tagData = attrs[tagKey] as? Data {
+      //   return String(data: tagData, encoding: .utf8)
+      // }
       return nil
     }
+    return Array(Set(aliases))
   }
 
   private func getPublicKey(alias: String) -> String? {
@@ -308,7 +386,9 @@ public class DeviceCryptoModule: Module {
     guard let secKey else { return nil }
 
     let algoType = AlgorithmType(rawValue: o["algoType"] as! String)
-    let algo = self.toiOSAlgo(algorithm: algoType!)
+    guard let algoType, let algo = self.toiOSAlgo(algorithm: algoType) else {
+      return nil
+    }
 
     var signingError: Unmanaged<CFError>?
     let signatureCF = SecKeyCreateSignature(
@@ -335,7 +415,9 @@ public class DeviceCryptoModule: Module {
     guard let signatureData = Data(base64Encoded: signature) else { return nil }
 
     let algoType = AlgorithmType(rawValue: o["algoType"] as! String)
-    let algo = self.toiOSAlgo(algorithm: algoType!)
+    guard let algoType, let algo = self.toiOSAlgo(algorithm: algoType) else {
+      return nil
+    }
 
     let valid = SecKeyVerifySignature(
       publicKey,
@@ -348,43 +430,73 @@ public class DeviceCryptoModule: Module {
   }
 
   private func encrypt(alias: String, data: String, o: [String: Any]) -> String? {
-    let secKey = self.getSecKeyByAlias(alias, keyClass: kSecAttrKeyClassPublic)
-    guard let secKey else { return nil }
-    let publicKey = SecKeyCopyPublicKey(secKey)!
-
     let algoType = AlgorithmType(rawValue: o["algoType"] as! String)
-    let algo = self.toiOSAlgo(algorithm: algoType!)
+    guard let algoType else { return nil }
 
-    guard let encrypted = SecKeyCreateEncryptedData(
-      publicKey,
-      algo,
-      Data(data.utf8) as CFData,
-      nil
-    ) as Data? else {
-      return nil
+    switch algoType {
+      case .AES_256_GCM:
+        guard let symmetricKey = self.getSecKeyByAlias(alias, keyClass: kSecAttrKeyClassSymmetric) else {
+          return nil
+        }
+        guard let encrypted = self.encryptAESGCM(key: symmetricKey, plaintext: Data(data.utf8)) else {
+          return nil
+        }
+        return encrypted.base64EncodedString()
+      default:
+        guard
+          let publicKey = self.getSecKeyByAlias(alias, keyClass: kSecAttrKeyClassPublic),
+          let algo = self.toiOSAlgo(algorithm: algoType)
+        else {
+          return nil
+        }
+
+        guard let encrypted = SecKeyCreateEncryptedData(
+          publicKey,
+          algo,
+          Data(data.utf8) as CFData,
+          nil
+        ) as Data? else {
+          return nil
+        }
+
+        return encrypted.base64EncodedString()
     }
-
-    return encrypted.base64EncodedString()
   }
 
   private func decrypt(alias: String, data: String, o: [String: Any]) -> String? {
-    let secKey = self.getSecKeyByAlias(alias, keyClass: kSecAttrKeyClassPrivate)
-    guard let secKey else { return nil }
     guard let encryptedData = Data(base64Encoded: data) else { return nil }
 
     let algoType = AlgorithmType(rawValue: o["algoType"] as! String)
-    let algo = self.toiOSAlgo(algorithm: algoType!)
+    guard let algoType else { return nil }
 
-    guard let decrypted = SecKeyCreateDecryptedData(
-      secKey,
-      algo,
-      encryptedData as CFData,
-      nil
-    ) as Data? else {
-      return nil
+    switch algoType {
+      case .AES_256_GCM:
+        guard let symmetricKey = self.getSecKeyByAlias(alias, keyClass: kSecAttrKeyClassSymmetric) else {
+          return nil
+        }
+        guard let decrypted = self.decryptAESGCM(key: symmetricKey, ciphertext: encryptedData) else {
+          return nil
+        }
+        return String(data: decrypted, encoding: .utf8)
+      default:
+        guard
+          let privateKey = self.getSecKeyByAlias(alias, keyClass: kSecAttrKeyClassPrivate),
+          let algo = self.toiOSAlgo(algorithm: algoType)
+        else {
+          return nil
+        }
+
+        guard let decrypted = SecKeyCreateDecryptedData(
+          privateKey,
+          algo,
+          encryptedData as CFData,
+          nil
+        ) as Data? else {
+          return nil
+        }
+
+        return String(data: decrypted, encoding: .utf8)
     }
-
-    return String(data: decrypted, encoding: .utf8)
   }
 
   public func definition() -> ModuleDefinition {
