@@ -36,6 +36,7 @@ import java.security.spec.MGF1ParameterSpec
 import java.security.spec.X509EncodedKeySpec
 import javax.crypto.Cipher
 import javax.crypto.KeyAgreement
+import javax.crypto.Mac
 import javax.crypto.spec.GCMParameterSpec
 import javax.crypto.spec.OAEPParameterSpec
 import javax.crypto.spec.PSource
@@ -77,6 +78,41 @@ class DeviceCryptoModule : Module() {
     }
   }
 
+  private fun hkdfSha256(
+    ikm: ByteArray,
+    length: Int,
+    salt: ByteArray? = null,
+    info: ByteArray? = null): ByteArray {
+    val mac = Mac.getInstance("HmacSHA256")
+    val actualSalt = salt ?: ByteArray(32)
+    mac.init(SecretKeySpec(actualSalt, "HmacSHA256"))
+    val prk = mac.doFinal(ikm)
+
+    val result = ByteArray(length)
+    var t = ByteArray(0)
+    var offset = 0
+    var counter = 1
+
+    while (offset < length) {
+        val macExpand = Mac.getInstance("HmacSHA256")
+        macExpand.init(SecretKeySpec(prk, "HmacSHA256"))
+
+        macExpand.update(t)
+        if (info != null) macExpand.update(info)
+        macExpand.update(counter.toByte())
+
+        t = macExpand.doFinal()
+
+        val toCopy = minOf(t.size, length - offset)
+        System.arraycopy(t, 0, result, offset, toCopy)
+
+        offset += toCopy
+        counter++
+    }
+
+    return result
+  }
+
   private fun getOaepSpec(algoType: AlgorithmType): AlgorithmParameterSpec? {
     return when (algoType) {
       AlgorithmType.RSA_2048_OAEP_SHA1 -> OAEPParameterSpec(
@@ -115,7 +151,7 @@ class DeviceCryptoModule : Module() {
 
   private fun buildECDSA(
     alias: String, 
-    digest: String,
+    digest: String?,
     reqAuth: Boolean,
     strongBox: Boolean): KeyPairGenerator {
     val kpg: KeyPairGenerator = KeyPairGenerator.getInstance(
@@ -127,7 +163,9 @@ class DeviceCryptoModule : Module() {
       alias,
       PURPOSE_SIGN or PURPOSE_VERIFY
     ).run {
-      setDigests(digest)
+      if (digest != null) {
+        setDigests(digest)
+      }
       setIsStrongBoxBacked(strongBox)
       setUserAuthenticationRequired(reqAuth)
       if (reqAuth) {
@@ -175,9 +213,9 @@ class DeviceCryptoModule : Module() {
     return kpg
   }
 
-  private fun buildEC(
+  private fun buildECIES(
     alias: String,
-    digest: String,
+    digest: String?,
     reqAuth: Boolean,
     strongBox: Boolean): KeyPairGenerator {
     val kpg: KeyPairGenerator = KeyPairGenerator.getInstance(
@@ -189,7 +227,9 @@ class DeviceCryptoModule : Module() {
       alias,
       PURPOSE_AGREE_KEY
     ).run {
-      setDigests(digest)
+      if (digest != null) {
+        setDigests(digest)
+      }
       setIsStrongBoxBacked(strongBox)
       setUserAuthenticationRequired(reqAuth)
       if (reqAuth) {
@@ -286,7 +326,7 @@ class DeviceCryptoModule : Module() {
       AlgorithmType.ECDSA_SECP256R1_SHA256 -> buildECDSA(alias, DIGEST_SHA256, reqAuth, strongBox)
       AlgorithmType.RSA_2048_PKCS1 -> buildRSA(alias, null, ENCRYPTION_PADDING_RSA_PKCS1, reqAuth, strongBox)
       AlgorithmType.RSA_2048_OAEP_SHA1 -> buildRSA(alias, DIGEST_SHA1, ENCRYPTION_PADDING_RSA_OAEP, reqAuth, strongBox)
-      AlgorithmType.ECIES_P256_AES256_GCM -> buildEC(alias, DIGEST_SHA256, reqAuth, strongBox)
+      AlgorithmType.ECIES_P256_AES256_GCM -> buildECIES(alias, null, reqAuth, strongBox)
       else -> throw Exception("INVALID_ALGORITHM_TYPE")
     }
 
@@ -418,7 +458,7 @@ class DeviceCryptoModule : Module() {
         AlgorithmType.ECIES_P256_AES256_GCM -> {
           val peerPublicKey = o["peerPublicKey"] as String
           val sharedSecret = deriveSharedSecret(entry, peerPublicKey)
-          val aesKey = SecretKeySpec(sharedSecret.copyOf(32), "AES")
+          val aesKey = SecretKeySpec(hkdfSha256(sharedSecret, 32), "AES")
           cipher.init(Cipher.ENCRYPT_MODE, aesKey)
           val encrypted = cipher.doFinal(data.toByteArray(Charsets.UTF_8))
           val payload = cipher.iv + encrypted
@@ -487,7 +527,7 @@ class DeviceCryptoModule : Module() {
         AlgorithmType.ECIES_P256_AES256_GCM -> {
           val peerPublicKey = o["peerPublicKey"] as String
           val sharedSecret = deriveSharedSecret(entry, peerPublicKey)
-          val aesKey = SecretKeySpec(sharedSecret.copyOf(32), "AES")
+          val aesKey = SecretKeySpec(hkdfSha256(sharedSecret, 32), "AES")
           val iv = ciphertext.copyOfRange(0, 12)
           val encryptedPayload = ciphertext.copyOfRange(12, ciphertext.size)
           val gcmSpec = GCMParameterSpec(128, iv)
