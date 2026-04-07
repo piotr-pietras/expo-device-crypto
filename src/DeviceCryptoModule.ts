@@ -145,9 +145,13 @@ export default {
   encrypt: async (alias: string, data: string, options?: EncryptOptions) => {
     const o = {
       algoType: options?.algorithmType ?? EncryptionAlgorithm.RSA_2048_PKCS1,
+      // @ts-ignore
       title: options?.promptTitle ?? "Unlock",
+      // @ts-ignore
       subtitle: options?.promptSubtitle ?? "Enter your PIN to continue",
+      // @ts-ignore
       authMethod: options?.authMethod ?? AuthMethod.PASSCODE_OR_BIOMETRIC,
+      // @ts-ignore
       peerPublicKey: options?.peerPublicKey ?? "",
     };
     return module.encrypt(alias, data, o);
@@ -165,6 +169,7 @@ export default {
       subtitle: options?.promptSubtitle ?? "Enter your PIN to continue",
       authMethod: options?.authMethod ?? AuthMethod.PASSCODE_OR_BIOMETRIC,
       algoType: options?.algorithmType ?? EncryptionAlgorithm.RSA_2048_PKCS1,
+      // @ts-ignore
       peerPublicKey: options?.peerPublicKey ?? "",
     };
     return module.decrypt(alias, data, o);
