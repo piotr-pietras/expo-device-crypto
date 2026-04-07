@@ -28,25 +28,28 @@ If you want to allow Face ID on iOS, add this to your app config:
 
 ### Signature Algorithms
 
-- #### `ECDSA_SECP256R1_SHA256`
+- `ECDSA_SECP256R1_SHA256`
 
 **Curve:** P-256 / secp256r1. </br>
 **Hash:** SHA-256. </br>
-**Use it for:** Authentication challenges, message signing, and tamper detection.
 
 ### Encryption Algorithms
 
-- #### `RSA_2048_PKCS1`
+- `RSA_2048_PKCS1`
 
 **Key size:** 2048 bits. </br>
 **Padding:** PKCS#1 v1.5. </br>
-**Use it for:** Encrypting small secrets that only the private key holder should decrypt.
 
-- #### `RSA_2048_OAEP_SHA1`
+- `RSA_2048_OAEP_SHA1`
 
 **Key size:** 2048 bits. </br>
 **Padding:** OAEP with SHA-1 and MGF1. </br>
-**Use it for:** Encrypting small secrets with stronger padding than PKCS#1 v1.5 when interoperating with OAEP SHA-1 systems.
+
+- `ECIES_P256_AES256_GCM`
+
+**Curve:** P-256 (secp256r1). </br>
+**Symmetric cipher:** AES-256-GCM. </br>
+**Key derivation:** HKDF-SHA256 (32-byte key from ECDH shared secret). </br>
 
 **More coming soon...**
 
@@ -171,17 +174,17 @@ const decrypted = await DeviceCrypto.decrypt(alias, encrypted ?? "", {
 - `encrypt(alias: string, data: string, options?: EncryptOptions): Promise<string | null>`
   - Encrypts UTF-8 `data` with public key.
   - Default: `algorithmType = RSA_2048_PKCS1`.
+  - For `algorithmType = ECIES_P256_AES256_GCM`, `peerPublicKey` is required in `options`.
 
 - `decrypt(alias: string, data: string, options?: DecryptOptions): Promise<string | null>`
   - Decrypts Base64 `data` with private key.
   - Defaults: `algorithmType = RSA_2048_PKCS1`, `promptTitle = "Unlock"`, `promptSubtitle = "Enter your PIN to continue"`, `authMethod = PASSCODE_OR_BIOMETRIC`.
+  - For `algorithmType = ECIES_P256_AES256_GCM`, `peerPublicKey` is required in `options`.
 
 **Android only methods**
 
 - `isStrongBoxAvailable(): boolean`
   - Returns `true` if StrongBox Keystore is supported on the device.
-
-> ✅ JSDoc type definitions are available in `./src/DeviceCryptoModule.ts`.
 
 ## Important
 
@@ -205,6 +208,6 @@ await DeviceCrypto.generateKeyPair(alias, {
 
 If StrongBox is not available, Android falls back to the Trusted Execution Environment (TEE).
 
-### RSA algorithms on iOS
+### Secure Enclave support on iOS
 
-Please note that RSA private-key operations are not performed in the [Secure Enclave processor](https://developer.apple.com/documentation/security/ksecattrtokenidsecureenclave?utm_source=chatgpt.com#Discussion). Instead, they are software-backed and handled by Apple’s system cryptographic services, which still provide strong isolation and protection.
+On iOS, only ECDSA keys can use the [Secure Enclave processor](https://developer.apple.com/documentation/security/ksecattrtokenidsecureenclave?utm_source=chatgpt.com#Discussion). RSA private-key operations are software-backed and handled by Apple’s system cryptographic services, which still provide strong isolation and protection.
