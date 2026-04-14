@@ -43,7 +43,7 @@ export type GenerateKeyPairOptions = {
   requireAuthentication?: boolean;
   /**
    * The method of authentication to use.
-   * Note that on Android you have to define it when signing.
+   * Note that on Android you have to define it when signing or decrypting.
    *
    * If you want to allow to use Face ID, you need to add the following to your app.json config file:
    * ```json

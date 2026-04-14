@@ -1,0 +1,10 @@
+{
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    "strict": true,
+    "paths": {
+      "expo-device-crypto": ["../src/index"],
+      "expo-device-crypto/*": ["../src/*"]
+    }
+  }
+}

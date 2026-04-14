@@ -42,11 +42,10 @@ export default function TestScreen() {
   const [peerPublicKey, setPeerPublicKey] = useState<string>(
     "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEk72yPYU5xkstWM23dYkyzJ6IeMhVoN1zo5qIrDZoJaX9DMzYloKVuj9u7iYJrGzbzEy2QA/kfFA/SjLicu7fDg=="
   );
-  const [sharedSecret, setSharedSecret] = useState<string>("");
 
   return (
     <ScrollView style={styles.container}>
-      <Group name="Auth Check Available">
+      <Group name="Auth Checs k Available">
         <Text
           style={{
             color:
@@ -289,19 +288,6 @@ export default function TestScreen() {
           value={peerPublicKey}
           onChangeText={setPeerPublicKey}
         />
-        {/* <Button
-          onPress={() => {
-            DeviceCrypto.computeSharedSecret(alias, peerPublicKey)
-              .then((result) => {
-                setSharedSecret(result ?? "");
-              })
-              .catch((error) => {
-                console.error(error);
-              });
-          }}
-          title="Compute Shared Secret"
-        />
-        <Text>{sharedSecret}</Text> */}
       </Group>
     </ScrollView>
   );
