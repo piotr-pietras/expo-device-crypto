@@ -103,9 +103,9 @@ const decrypted = await DeviceCrypto.decrypt(alias, encrypted, {
 
 ### 📚 More examples
 
-You can find additional usage examples in the [`examples` directory](https://github.com/piotr-pietras/expo-device-crypto/tree/master/examples) of the main repository.
+**You can find additional usage examples in the [`examples` directory](https://github.com/piotr-pietras/expo-device-crypto/tree/master/examples) of the main repository.**
 
-### 🛠️ Methods
+## Methods
 
 - `isAuthCheckAvailable(): AuthCheckResult`
   - Returns device authentication availability (`AVAILABLE`, `NO_HARDWARE`, `UNAVAILABLE`).
@@ -148,7 +148,7 @@ You can find additional usage examples in the [`examples` directory](https://git
 - `isStrongBoxAvailable(): boolean`
   - Returns `true` if StrongBox Keystore is supported on the device.
 
-## ⚠️ Important
+## Important
 
 ### Enable Strong Box on Android
 
