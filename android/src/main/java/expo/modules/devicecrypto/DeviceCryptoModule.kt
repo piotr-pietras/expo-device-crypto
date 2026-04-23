@@ -10,6 +10,7 @@ import android.security.keystore.KeyProperties.DIGEST_SHA1
 import android.security.keystore.KeyProperties.DIGEST_SHA256
 import android.security.keystore.KeyProperties.ENCRYPTION_PADDING_RSA_OAEP
 import android.security.keystore.KeyProperties.ENCRYPTION_PADDING_RSA_PKCS1
+import android.security.keystore.KeyProperties.SIGNATURE_PADDING_RSA_PKCS1
 import android.security.keystore.KeyProperties.KEY_ALGORITHM_EC
 import android.security.keystore.KeyProperties.KEY_ALGORITHM_RSA
 import android.security.keystore.KeyProperties.PURPOSE_DECRYPT
@@ -65,6 +66,12 @@ enum class AlgorithmType {
   RSA_2048_PKCS1,
   RSA_2048_OAEP_SHA1,
   ECIES_P256_AES256_GCM,
+  SHA256withRSA
+}
+
+enum class Purpose {
+  ENCRYPT,
+  SIGN,
 }
 
 class DeviceCryptoModule : Module() {
@@ -74,6 +81,7 @@ class DeviceCryptoModule : Module() {
       AlgorithmType.RSA_2048_PKCS1 -> "RSA/ECB/PKCS1Padding"
       AlgorithmType.RSA_2048_OAEP_SHA1 -> "RSA/ECB/OAEPwithSHA-1AndMGF1Padding"
       AlgorithmType.ECIES_P256_AES256_GCM -> "AES/GCM/NoPadding"
+      AlgorithmType.SHA256withRSA -> "SHA256withRSA"
       else -> throw Exception("INVALID_ALGORITHM_TYPE")
     }
   }
@@ -183,7 +191,8 @@ class DeviceCryptoModule : Module() {
   private fun buildRSA(
     alias: String, 
     digest: String?,
-    padding: String,
+    purpose: Purpose,
+    padding: String?,
     reqAuth: Boolean,
     strongBox: Boolean): KeyPairGenerator {
     val kpg: KeyPairGenerator = KeyPairGenerator.getInstance(
@@ -193,12 +202,20 @@ class DeviceCryptoModule : Module() {
 
     val parameterSpec: KeyGenParameterSpec = KeyGenParameterSpec.Builder(
       alias,
-      PURPOSE_ENCRYPT or PURPOSE_DECRYPT
+      when (purpose) {
+        Purpose.ENCRYPT -> PURPOSE_ENCRYPT or PURPOSE_DECRYPT
+        Purpose.SIGN -> PURPOSE_SIGN or PURPOSE_VERIFY
+      }
     ).run {
       if (digest != null) {
         setDigests(digest)
       }
-      setEncryptionPaddings(padding)
+      if (padding != null && purpose == Purpose.ENCRYPT) {
+        setEncryptionPaddings(padding)
+      }
+      if (padding != null && purpose == Purpose.SIGN) {
+        setSignaturePaddings(padding)
+      }
       setIsStrongBoxBacked(strongBox)
       setUserAuthenticationRequired(reqAuth)
       if (reqAuth) {
@@ -323,10 +340,42 @@ class DeviceCryptoModule : Module() {
     val strongBox = preferStrongBox && isStrongBoxAvailable()
 
     val kpg = when (algoType) {
-      AlgorithmType.ECDSA_SECP256R1_SHA256 -> buildECDSA(alias, DIGEST_SHA256, reqAuth, strongBox)
-      AlgorithmType.RSA_2048_PKCS1 -> buildRSA(alias, null, ENCRYPTION_PADDING_RSA_PKCS1, reqAuth, strongBox)
-      AlgorithmType.RSA_2048_OAEP_SHA1 -> buildRSA(alias, DIGEST_SHA1, ENCRYPTION_PADDING_RSA_OAEP, reqAuth, strongBox)
-      AlgorithmType.ECIES_P256_AES256_GCM -> buildECIES(alias, null, reqAuth, strongBox)
+      AlgorithmType.ECDSA_SECP256R1_SHA256 -> buildECDSA(
+        alias = alias,
+        digest = DIGEST_SHA256,
+        reqAuth = reqAuth,
+        strongBox = strongBox
+      )
+      AlgorithmType.RSA_2048_PKCS1 -> buildRSA(
+        alias = alias,
+        digest = null,
+        purpose = Purpose.ENCRYPT,
+        padding = ENCRYPTION_PADDING_RSA_PKCS1,
+        reqAuth = reqAuth,
+        strongBox = strongBox
+      )
+      AlgorithmType.RSA_2048_OAEP_SHA1 -> buildRSA(
+        alias = alias,
+        digest = DIGEST_SHA1,
+        purpose = Purpose.ENCRYPT,
+        padding = ENCRYPTION_PADDING_RSA_OAEP,
+        reqAuth = reqAuth,
+        strongBox = strongBox
+      )
+      AlgorithmType.ECIES_P256_AES256_GCM -> buildECIES(
+        alias = alias,
+        digest = null,
+        reqAuth = reqAuth,
+        strongBox = strongBox
+      )
+      AlgorithmType.SHA256withRSA -> buildRSA(
+        alias = alias,
+        digest = DIGEST_SHA256,
+        purpose = Purpose.SIGN,
+        padding = SIGNATURE_PADDING_RSA_PKCS1,
+        reqAuth = reqAuth,
+        strongBox = strongBox
+      )
       else -> throw Exception("INVALID_ALGORITHM_TYPE")
     }
 

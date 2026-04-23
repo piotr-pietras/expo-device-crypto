@@ -115,6 +115,10 @@ export default function TestScreen() {
               label="ECIES P256 AES256 GCM"
               value={EncryptionAlgorithm.ECIES_P256_AES256_GCM}
             />
+            <Picker.Item
+              label="SHA256withRSA"
+              value={SigningAlgorithm.SHA256withRSA}
+            />
           </Picker>
         </View>
         <TextInput
@@ -185,7 +189,7 @@ export default function TestScreen() {
         <Button
           onPress={() => {
             DeviceCrypto.sign(alias, textToSign, {
-              algorithmType: SigningAlgorithm.ECDSA_SECP256R1_SHA256,
+              algorithmType: algoType as SigningAlgorithm,
               authMethod: AuthMethod.PASSCODE_OR_BIOMETRIC,
               promptTitle: "TEST",
               promptSubtitle: "TEST",
@@ -199,21 +203,22 @@ export default function TestScreen() {
           }}
           title="Sign"
         />
-        <TextInput
-          style={[styles.input, { height: 100 }]}
-          placeholder="Generated signature"
-          multiline={true}
-          numberOfLines={4}
-          value={signature}
-          onChangeText={setSignature}
-        />
+        <TouchableOpacity
+          onPress={() => {
+            Clipboard.setString(signature);
+          }}
+        >
+          <Text>{signature}</Text>
+        </TouchableOpacity>
         <Button
           onPress={async () => {
             try {
               const verified = await DeviceCrypto.verify(
                 alias,
                 textToSign,
-                signature
+                signature, {
+                  algorithmType: algoType as SigningAlgorithm,
+                }
               );
               setVerified(verified ?? false);
             } catch (error) {

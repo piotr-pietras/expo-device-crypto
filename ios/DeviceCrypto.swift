@@ -26,6 +26,7 @@ enum AlgorithmType: String {
   case RSA_2048_PKCS1 = "RSA_2048_PKCS1"
   case RSA_2048_OAEP_SHA1 = "RSA_2048_OAEP_SHA1"
   case ECIES_P256_AES256_GCM = "ECIES_P256_AES256_GCM"
+  case SHA256withRSA = "SHA256withRSA"
 }
 
 public class DeviceCryptoModule: Module {
@@ -39,6 +40,8 @@ public class DeviceCryptoModule: Module {
       return .rsaEncryptionOAEPSHA1
     case .ECIES_P256_AES256_GCM:
       return .eciesEncryptionCofactorX963SHA256AESGCM
+    case .SHA256withRSA:
+      return .rsaSignatureMessagePKCS1v15SHA256
     }
   }
 
@@ -323,6 +326,8 @@ public class DeviceCryptoModule: Module {
         self.buildRSA(alias: alias, reqAuth: reqAuth, authMethod: authMethod!)
       case .ECIES_P256_AES256_GCM:
         self.buildECIES(alias: alias, reqAuth: reqAuth, authMethod: authMethod!)
+      case .SHA256withRSA:
+        self.buildRSA(alias: alias, reqAuth: reqAuth, authMethod: authMethod!)
       default:
         throw NSError(
           domain: "DeviceCrypto",
