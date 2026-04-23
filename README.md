@@ -33,6 +33,12 @@ If you want to allow Face ID on iOS, add this to your app config:
   **Curve:** P-256 / secp256r1. </br>
   **Hash:** SHA-256. </br>
 
+- `SHA256withRSA`
+
+  **Key size:** 2048 bits. </br>
+  **Padding:** PKCS#1 v1.5. </br>
+  **Hash:** SHA-256. </br>
+
 ### 🔐 Encryption Algorithms
 
 - `RSA_2048_PKCS1`
