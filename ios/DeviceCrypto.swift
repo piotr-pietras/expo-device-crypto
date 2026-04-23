@@ -312,7 +312,7 @@ public class DeviceCryptoModule: Module {
       )
     }
 
-    let secKey = self.getSecKeyByAlias(alias, keyClass: kSecAttrKeyClassPrivate)
+    let secKey = self.getSecKeyByAlias(alias, keyClass: kSecAttrKeyClassPublic)
     if secKey != nil {
       return SecureSigningModuleResult.KEY_PAIR_ALREADY_EXISTS.rawValue
     }
@@ -423,7 +423,7 @@ public class DeviceCryptoModule: Module {
   }
 
   private func verify(alias: String, data: String, signature: String, o: [String: Any]) -> Bool? {
-    let secKey = self.getSecKeyByAlias(alias, keyClass: kSecAttrKeyClassPrivate)
+    let secKey = self.getSecKeyByAlias(alias, keyClass: kSecAttrKeyClassPublic)
     guard let secKey else { return nil }
 
     guard let publicKey = SecKeyCopyPublicKey(secKey) else { return nil }
