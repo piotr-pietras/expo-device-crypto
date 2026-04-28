@@ -17,7 +17,8 @@ export enum AuthMethod {
 
 export enum SigningAlgorithm {
   ECDSA_SECP256R1_SHA256 = "ECDSA_SECP256R1_SHA256",
-  SHA256withRSA = "SHA256withRSA",
+  RSA_SHA256 = "RSA_SHA256",
+  RSA_SHA256_PSS = "RSA_SHA256_PSS",
 }
 
 type EciesAlgorithm = "ECIES_P256_AES256_GCM";

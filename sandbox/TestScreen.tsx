@@ -117,7 +117,11 @@ export default function TestScreen() {
             />
             <Picker.Item
               label="SHA256withRSA"
-              value={SigningAlgorithm.SHA256withRSA}
+              value={SigningAlgorithm.RSA_SHA256}
+            />
+            <Picker.Item
+              label="SHA256withRSA/PSS"
+              value={SigningAlgorithm.RSA_SHA256_PSS}
             />
           </Picker>
         </View>

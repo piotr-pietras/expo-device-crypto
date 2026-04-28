@@ -11,6 +11,7 @@ import android.security.keystore.KeyProperties.DIGEST_SHA256
 import android.security.keystore.KeyProperties.ENCRYPTION_PADDING_RSA_OAEP
 import android.security.keystore.KeyProperties.ENCRYPTION_PADDING_RSA_PKCS1
 import android.security.keystore.KeyProperties.SIGNATURE_PADDING_RSA_PKCS1
+import android.security.keystore.KeyProperties.SIGNATURE_PADDING_RSA_PSS
 import android.security.keystore.KeyProperties.KEY_ALGORITHM_EC
 import android.security.keystore.KeyProperties.KEY_ALGORITHM_RSA
 import android.security.keystore.KeyProperties.PURPOSE_DECRYPT
@@ -66,7 +67,8 @@ enum class AlgorithmType {
   RSA_2048_PKCS1,
   RSA_2048_OAEP_SHA1,
   ECIES_P256_AES256_GCM,
-  SHA256withRSA
+  RSA_SHA256,
+  RSA_SHA256_PSS
 }
 
 enum class Purpose {
@@ -81,7 +83,8 @@ class DeviceCryptoModule : Module() {
       AlgorithmType.RSA_2048_PKCS1 -> "RSA/ECB/PKCS1Padding"
       AlgorithmType.RSA_2048_OAEP_SHA1 -> "RSA/ECB/OAEPwithSHA-1AndMGF1Padding"
       AlgorithmType.ECIES_P256_AES256_GCM -> "AES/GCM/NoPadding"
-      AlgorithmType.SHA256withRSA -> "SHA256withRSA"
+      AlgorithmType.RSA_SHA256 -> "SHA256withRSA"
+      AlgorithmType.RSA_SHA256_PSS -> "SHA256withRSA/PSS"
       else -> throw Exception("INVALID_ALGORITHM_TYPE")
     }
   }
@@ -368,11 +371,19 @@ class DeviceCryptoModule : Module() {
         reqAuth = reqAuth,
         strongBox = strongBox
       )
-      AlgorithmType.SHA256withRSA -> buildRSA(
+      AlgorithmType.RSA_SHA256 -> buildRSA(
         alias = alias,
         digest = DIGEST_SHA256,
         purpose = Purpose.SIGN,
         padding = SIGNATURE_PADDING_RSA_PKCS1,
+        reqAuth = reqAuth,
+        strongBox = strongBox
+      )
+      AlgorithmType.RSA_SHA256_PSS -> buildRSA(
+        alias = alias,
+        digest = DIGEST_SHA256,
+        purpose = Purpose.SIGN,
+        padding = SIGNATURE_PADDING_RSA_PSS,
         reqAuth = reqAuth,
         strongBox = strongBox
       )
