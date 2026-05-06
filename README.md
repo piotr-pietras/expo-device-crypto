@@ -1,7 +1,5 @@
 ## `expo-device-crypto`
 
-> ⚠️ This module is currently in beta and is not suitable for production use.
-
 🔒 Hardware-backed cryptography for Expo apps using [Android Keystore](https://developer.android.com/privacy-and-security/keystore)/[Strong Box](https://developer.android.com/privacy-and-security/keystore#StrongBoxKeyMint) and Apple [Secure Enclave](https://developer.apple.com/documentation/security/protecting-keys-with-the-secure-enclave)/[Keychain](https://developer.apple.com/documentation/security/keychain-services).
 
 ## Installation

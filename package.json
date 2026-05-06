@@ -1,6 +1,6 @@
 {
   "name": "expo-device-crypto",
-  "version": "0.4.0",
+  "version": "1.0.0",
   "description": "Crypto for Expo using device hardware capabilities",
   "main": "build/index.js",
   "types": "build/index.d.ts",
