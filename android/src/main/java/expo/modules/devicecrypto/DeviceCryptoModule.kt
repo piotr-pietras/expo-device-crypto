@@ -29,6 +29,7 @@ import androidx.fragment.app.FragmentActivity
 import expo.modules.kotlin.Promise
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
+import expo.modules.kotlin.types.Enumerable
 import java.security.KeyFactory
 import java.security.KeyPairGenerator
 import java.security.KeyStore
@@ -45,16 +46,16 @@ import javax.crypto.spec.PSource
 import javax.crypto.spec.SecretKeySpec
 
 
-enum class GenerateKeyPairResult {
-  KEY_PAIR_GENERATED,
-  KEY_PAIR_ALREADY_EXISTS,
-  NOT_AVAILABLE,
+enum class GenerateKeyPairResult(val value: String) : Enumerable {
+  KEY_PAIR_GENERATED("KEY_PAIR_GENERATED"),
+  KEY_PAIR_ALREADY_EXISTS("KEY_PAIR_ALREADY_EXISTS"),
+  NOT_AVAILABLE("NOT_AVAILABLE"),
 }
 
-enum class AuthCheckResult {
-  AVAILABLE,
-  UNAVAILABLE,
-  NO_HARDWARE,
+enum class AuthCheckResult(val value: String) : Enumerable {
+  AVAILABLE("AVAILABLE"),
+  UNAVAILABLE("UNAVAILABLE"),
+  NO_HARDWARE("NO_HARDWARE"),
 }
 
 enum class AuthMethod {
@@ -628,7 +629,7 @@ class DeviceCryptoModule : Module() {
     Name("DeviceCrypto")
 
     Function("isAuthCheckAvailable") { ->
-      return@Function isAuthCheckAvailable()
+      isAuthCheckAvailable().name
     }
 
     Function("isStrongBoxAvailable") { ->
@@ -636,7 +637,7 @@ class DeviceCryptoModule : Module() {
     }
 
     Function("generateKeyPair") { alias: String, o: Map<String, Any?> ->
-      return@Function generateKeyPair(alias, o)
+      generateKeyPair(alias, o).name
     }
 
     Function("removeKeyPair") { alias: String ->
