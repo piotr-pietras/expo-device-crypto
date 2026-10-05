@@ -3,8 +3,11 @@
   "compilerOptions": {
     "strict": true,
     "paths": {
+      "@/*": ["./src/*"],
+      "@/assets/*": ["./assets/*"],
       "expo-device-crypto": ["../src/index"],
       "expo-device-crypto/*": ["../src/*"]
     }
-  }
+  },
+  "include": ["**/*.ts", "**/*.tsx", ".expo/types/**/*.ts", "expo-env.d.ts"]
 }

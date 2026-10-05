@@ -15,6 +15,8 @@ import {
   View,
   Clipboard,
   TouchableOpacity,
+  ViewStyle,
+  StyleProp,
 } from "react-native";
 
 export default function TestScreen() {
@@ -42,6 +44,12 @@ export default function TestScreen() {
   const [peerPublicKey, setPeerPublicKey] = useState<string>(
     "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEk72yPYU5xkstWM23dYkyzJ6IeMhVoN1zo5qIrDZoJaX9DMzYloKVuj9u7iYJrGzbzEy2QA/kfFA/SjLicu7fDg=="
   );
+
+  const styleInline: StyleProp<ViewStyle> = {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  };
 
   return (
     <ScrollView style={styles.container}>
@@ -80,14 +88,14 @@ export default function TestScreen() {
         {DeviceCrypto.aliases().map((alias) => (
           <Text key={alias}>{alias}</Text>
         ))}
-        <View style={styles.inline}>
+        <View style={styleInline}>
           <Text>Require Authentication</Text>
           <Switch
             value={requireAuthentication}
             onValueChange={setRequireAuthentication}
           />
         </View>
-        <View style={styles.inline}>
+        <View style={styleInline}>
           <Text>Prefer Strong Box</Text>
           <Switch value={preferStrongBox} onValueChange={setPreferStrongBox} />
         </View>
@@ -156,7 +164,7 @@ export default function TestScreen() {
         />
         <Text style={{ color: generated ? "green" : "red" }}>{generated}</Text>
 
-        <View style={styles.inline}>
+        <View style={styleInline}>
           <Text>Public Key Format: {publicKeyFormat}</Text>
           <Switch
             value={publicKeyFormat === "PEM"}
@@ -220,7 +228,8 @@ export default function TestScreen() {
               const verified = await DeviceCrypto.verify(
                 alias,
                 textToSign,
-                signature, {
+                signature,
+                {
                   algorithmType: algoType as SigningAlgorithm,
                 }
               );
