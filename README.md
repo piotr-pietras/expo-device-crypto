@@ -24,42 +24,56 @@ If you want to allow Face ID on iOS, add this to your app config:
 
 ## Supported Algorithms
 
-### ✍️ Signature Algorithms
+<table>
+  <thead>
+    <tr>
+      <th width="50%">✍️ Signature Algorithms</th>
+      <th width="50%">🔐 Encryption Algorithms</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>
+        <code>ECDSA_SECP256R1_SHA256</code><br>
+        <strong>Curve:</strong> P-256 / secp256r1<br>
+        <strong>Hash:</strong> SHA-256
+      </td>
+      <td>
+        <code>ECIES_P256_AES256_GCM</code><br>
+        <strong>Curve:</strong> P-256 (secp256r1)<br>
+        <strong>Symmetric cipher:</strong> AES-256-GCM<br>
+        <strong>Key derivation:</strong> HKDF-SHA256 (32-byte key from ECDH shared secret)
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <code>RSA_SHA256</code><br>
+        <strong>Key size:</strong> 2048 bits<br>
+        <strong>Padding:</strong> PKCS#1 v1.5<br>
+        <strong>Hash:</strong> SHA-256
+      </td>
+      <td>
+        <code>RSA_2048_OAEP_SHA1</code><br>
+        <strong>Key size:</strong> 2048 bits<br>
+        <strong>Padding:</strong> OAEP with SHA-1 and MGF1
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <code>RSA_SHA256_PSS</code><br>
+        <strong>Key size:</strong> 2048 bits<br>
+        <strong>Padding:</strong> RSA-PSS (MGF1)<br>
+        <strong>Hash:</strong> SHA-256
+      </td>
+      <td>
+        <code>RSA_2048_PKCS1</code><br>
+        <strong>Key size:</strong> 2048 bits<br>
+        <strong>Padding:</strong> PKCS#1 v1.5
+      </td>
+    </tr>
 
-- `ECDSA_SECP256R1_SHA256`
-
-  **Curve:** P-256 / secp256r1. </br>
-  **Hash:** SHA-256. </br>
-
-- `RSA_SHA256`
-
-  **Key size:** 2048 bits. </br>
-  **Padding:** PKCS#1 v1.5. </br>
-  **Hash:** SHA-256. </br>
-
-- `RSA_SHA256_PSS`
-
-  **Key size:** 2048 bits. </br>
-  **Padding:** RSA-PSS (MGF1). </br>
-  **Hash:** SHA-256. </br>
-
-### 🔐 Encryption Algorithms
-
-- `RSA_2048_PKCS1`
-
-  **Key size:** 2048 bits. </br>
-  **Padding:** PKCS#1 v1.5. </br>
-
-- `RSA_2048_OAEP_SHA1`
-
-  **Key size:** 2048 bits. </br>
-  **Padding:** OAEP with SHA-1 and MGF1. </br>
-
-- `ECIES_P256_AES256_GCM`
-
-  **Curve:** P-256 (secp256r1). </br>
-  **Symmetric cipher:** AES-256-GCM. </br>
-  **Key derivation:** HKDF-SHA256 (32-byte key from ECDH shared secret). </br>
+  </tbody>
+</table>
 
 **More coming soon...**
 

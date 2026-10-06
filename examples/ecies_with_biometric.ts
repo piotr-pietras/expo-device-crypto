@@ -4,7 +4,8 @@ import DeviceCrypto, {
   EncryptionAlgorithm,
 } from "expo-device-crypto";
 
-const alias = "user-encryption-key";
+const alias1 = "ecies-alice";
+const alias2 = "ecies-bob";
 const dataToEncrypt = "Sensitive data";
 const algorithmType = EncryptionAlgorithm.ECIES_P256_AES256_GCM;
 const authMethod = AuthMethod.PASSCODE_OR_BIOMETRIC;
@@ -15,36 +16,37 @@ if (authStatus !== AuthCheckResult.AVAILABLE) {
   throw new Error(`Authentication unavailable: ${authStatus}`);
 }
 
-// 2) Generate an auth-protected EC key pair
-await DeviceCrypto.generateKeyPair(alias, {
+// 2) Each party generates an auth-protected EC key pair
+await DeviceCrypto.generateKeyPair(alias1, {
   algorithmType,
   requireAuthentication: true,
-  authMethod, // iOS: defined at key generation;
+  authMethod, // iOS: defined at key generation
 });
-
-// 3) Share own public key with the entity you want to encrypt data for
-const publicKey = DeviceCrypto.getPublicKey(alias);
-await fetch("somewhere.com", {
-  method: "POST",
-  body: JSON.stringify({ publicKey }),
-});
-
-// 4) Retrieve peer public key of the entity you want to encrypt data for
-const peerPublicKey = await fetch("somewhere.com").then((res) => res.json());
-
-// 5) Encrypt with public key
-// Note: This function should display the system user authentication prompt.
-const encrypted = await DeviceCrypto.encrypt(alias, dataToEncrypt, {
+await DeviceCrypto.generateKeyPair(alias2, {
   algorithmType,
-  peerPublicKey,
-  authMethod, // Android: Unlike RSA, ECIES requires authentication for both encryption and decryption.
+  requireAuthentication: true,
+  authMethod,
 });
 
-// 6) Decrypt with private key
+// 3) Exchange public keys
+const pk1 =
+  (await DeviceCrypto.getPublicKey(alias1, { format: "BASE64" })) ?? "";
+const pk2 =
+  (await DeviceCrypto.getPublicKey(alias2, { format: "BASE64" })) ?? "";
+
+// 4) Alice encrypts for Bob: ECDH(priv1, pub2)
+// Note: This function should display the system user authentication prompt.
+const encrypted = await DeviceCrypto.encrypt(alias1, dataToEncrypt, {
+  algorithmType,
+  peerPublicKey: pk2,
+  authMethod, // Android: ECIES requires auth for encrypt and decrypt
+});
+
+// 5) Bob decrypts: ECDH(priv2, pub1) — same shared secret
 // Note: Data to decrypt must be in Base64 format.
 // Note: This function should display the system user authentication prompt.
-const decrypted = await DeviceCrypto.decrypt(alias, encrypted ?? "", {
+const decrypted = await DeviceCrypto.decrypt(alias2, encrypted ?? "", {
   algorithmType,
-  authMethod, // Android: defined when decrypting
-  peerPublicKey,
+  peerPublicKey: pk1,
+  authMethod,
 });
