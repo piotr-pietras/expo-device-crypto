@@ -67,9 +67,13 @@ enum class AlgorithmType {
   ECDSA_SECP256R1_SHA256,
   RSA_2048_PKCS1,
   RSA_2048_OAEP_SHA1,
+  RSA_4096_PKCS1,
+  RSA_4096_OAEP_SHA1,
   ECIES_P256_AES256_GCM,
   RSA_SHA256,
-  RSA_SHA256_PSS
+  RSA_SHA256_PSS,
+  RSA_4096_SHA256,
+  RSA_4096_SHA256_PSS
 }
 
 enum class Purpose {
@@ -82,52 +86,22 @@ class DeviceCryptoModule : Module() {
     return when (algorithm) {
       AlgorithmType.ECDSA_SECP256R1_SHA256 -> "SHA256withECDSA"
       AlgorithmType.RSA_2048_PKCS1 -> "RSA/ECB/PKCS1Padding"
+      AlgorithmType.RSA_4096_PKCS1 -> "RSA/ECB/PKCS1Padding"
       AlgorithmType.RSA_2048_OAEP_SHA1 -> "RSA/ECB/OAEPwithSHA-1AndMGF1Padding"
+      AlgorithmType.RSA_4096_OAEP_SHA1 -> "RSA/ECB/OAEPwithSHA-1AndMGF1Padding"
       AlgorithmType.ECIES_P256_AES256_GCM -> "AES/GCM/NoPadding"
       AlgorithmType.RSA_SHA256 -> "SHA256withRSA"
+      AlgorithmType.RSA_4096_SHA256 -> "SHA256withRSA"
       AlgorithmType.RSA_SHA256_PSS -> "SHA256withRSA/PSS"
+      AlgorithmType.RSA_4096_SHA256_PSS -> "SHA256withRSA/PSS"
       else -> throw Exception("INVALID_ALGORITHM_TYPE")
     }
   }
 
-  private fun hkdfSha256(
-    ikm: ByteArray,
-    length: Int,
-    salt: ByteArray? = null,
-    info: ByteArray? = null): ByteArray {
-    val mac = Mac.getInstance("HmacSHA256")
-    val actualSalt = salt ?: ByteArray(32)
-    mac.init(SecretKeySpec(actualSalt, "HmacSHA256"))
-    val prk = mac.doFinal(ikm)
-
-    val result = ByteArray(length)
-    var t = ByteArray(0)
-    var offset = 0
-    var counter = 1
-
-    while (offset < length) {
-        val macExpand = Mac.getInstance("HmacSHA256")
-        macExpand.init(SecretKeySpec(prk, "HmacSHA256"))
-
-        macExpand.update(t)
-        if (info != null) macExpand.update(info)
-        macExpand.update(counter.toByte())
-
-        t = macExpand.doFinal()
-
-        val toCopy = minOf(t.size, length - offset)
-        System.arraycopy(t, 0, result, offset, toCopy)
-
-        offset += toCopy
-        counter++
-    }
-
-    return result
-  }
-
   private fun getOaepSpec(algoType: AlgorithmType): AlgorithmParameterSpec? {
     return when (algoType) {
-      AlgorithmType.RSA_2048_OAEP_SHA1 -> OAEPParameterSpec(
+      AlgorithmType.RSA_2048_OAEP_SHA1,
+      AlgorithmType.RSA_4096_OAEP_SHA1 -> OAEPParameterSpec(
         "SHA-1",
         "MGF1",
         MGF1ParameterSpec.SHA1,
@@ -197,6 +171,7 @@ class DeviceCryptoModule : Module() {
     digest: String?,
     purpose: Purpose,
     padding: String?,
+    keySize: Int,
     reqAuth: Boolean,
     strongBox: Boolean): KeyPairGenerator {
     val kpg: KeyPairGenerator = KeyPairGenerator.getInstance(
@@ -221,6 +196,7 @@ class DeviceCryptoModule : Module() {
         setSignaturePaddings(padding)
       }
       setIsStrongBoxBacked(strongBox)
+      setKeySize(keySize)
       setUserAuthenticationRequired(reqAuth)
       if (reqAuth) {
         setUserAuthenticationParameters(
@@ -355,6 +331,7 @@ class DeviceCryptoModule : Module() {
         digest = null,
         purpose = Purpose.ENCRYPT,
         padding = ENCRYPTION_PADDING_RSA_PKCS1,
+        keySize = 2048,
         reqAuth = reqAuth,
         strongBox = strongBox
       )
@@ -363,6 +340,25 @@ class DeviceCryptoModule : Module() {
         digest = DIGEST_SHA1,
         purpose = Purpose.ENCRYPT,
         padding = ENCRYPTION_PADDING_RSA_OAEP,
+        keySize = 2048,
+        reqAuth = reqAuth,
+        strongBox = strongBox
+      )
+      AlgorithmType.RSA_4096_PKCS1 -> buildRSA(
+        alias = alias,
+        digest = null,
+        purpose = Purpose.ENCRYPT,
+        padding = ENCRYPTION_PADDING_RSA_PKCS1,
+        keySize = 4096,
+        reqAuth = reqAuth,
+        strongBox = strongBox
+      )
+      AlgorithmType.RSA_4096_OAEP_SHA1 -> buildRSA(
+        alias = alias,
+        digest = DIGEST_SHA1,
+        purpose = Purpose.ENCRYPT,
+        padding = ENCRYPTION_PADDING_RSA_OAEP,
+        keySize = 4096,
         reqAuth = reqAuth,
         strongBox = strongBox
       )
@@ -377,6 +373,7 @@ class DeviceCryptoModule : Module() {
         digest = DIGEST_SHA256,
         purpose = Purpose.SIGN,
         padding = SIGNATURE_PADDING_RSA_PKCS1,
+        keySize = 2048,
         reqAuth = reqAuth,
         strongBox = strongBox
       )
@@ -385,6 +382,25 @@ class DeviceCryptoModule : Module() {
         digest = DIGEST_SHA256,
         purpose = Purpose.SIGN,
         padding = SIGNATURE_PADDING_RSA_PSS,
+        keySize = 2048,
+        reqAuth = reqAuth,
+        strongBox = strongBox
+      )
+      AlgorithmType.RSA_4096_SHA256 -> buildRSA(
+        alias = alias,
+        digest = DIGEST_SHA256,
+        purpose = Purpose.SIGN,
+        padding = SIGNATURE_PADDING_RSA_PKCS1,
+        keySize = 4096,
+        reqAuth = reqAuth,
+        strongBox = strongBox
+      )
+      AlgorithmType.RSA_4096_SHA256_PSS -> buildRSA(
+        alias = alias,
+        digest = DIGEST_SHA256,
+        purpose = Purpose.SIGN,
+        padding = SIGNATURE_PADDING_RSA_PSS,
+        keySize = 4096,
         reqAuth = reqAuth,
         strongBox = strongBox
       )
@@ -505,13 +521,15 @@ class DeviceCryptoModule : Module() {
 
     fun runEncryption(cipher: Cipher) {
       when (algoType) {
-        AlgorithmType.RSA_2048_OAEP_SHA1 -> {
+        AlgorithmType.RSA_2048_OAEP_SHA1,
+        AlgorithmType.RSA_4096_OAEP_SHA1 -> {
           val oaepSpec = getOaepSpec(algoType)
           cipher.init(Cipher.ENCRYPT_MODE, entry.certificate.publicKey, oaepSpec)
           val encrypted = cipher.doFinal(data.toByteArray(Charsets.UTF_8))
           promise.resolve(Base64.encodeToString(encrypted, Base64.NO_WRAP))
         }
-        AlgorithmType.RSA_2048_PKCS1 -> {
+        AlgorithmType.RSA_2048_PKCS1,
+        AlgorithmType.RSA_4096_PKCS1 -> {
           cipher.init(Cipher.ENCRYPT_MODE, entry.certificate.publicKey)
           val encrypted = cipher.doFinal(data.toByteArray(Charsets.UTF_8))
           promise.resolve(Base64.encodeToString(encrypted, Base64.NO_WRAP))
@@ -572,14 +590,16 @@ class DeviceCryptoModule : Module() {
 
     fun runDecryption(cipher: Cipher) {
       when (algoType) {
-        AlgorithmType.RSA_2048_OAEP_SHA1 -> {
+        AlgorithmType.RSA_2048_OAEP_SHA1,
+        AlgorithmType.RSA_4096_OAEP_SHA1 -> {
           val oaepSpec = getOaepSpec(algoType)
           cipher.init(Cipher.DECRYPT_MODE, entry.privateKey, oaepSpec)
           val decrypted = cipher.doFinal(ciphertext)
           promise.resolve(String(decrypted, Charsets.UTF_8))
           return
         }
-        AlgorithmType.RSA_2048_PKCS1 -> {
+        AlgorithmType.RSA_2048_PKCS1,
+        AlgorithmType.RSA_4096_PKCS1 -> {
           cipher.init(Cipher.DECRYPT_MODE, entry.privateKey)
           val decrypted = cipher.doFinal(ciphertext)
           promise.resolve(String(decrypted, Charsets.UTF_8))

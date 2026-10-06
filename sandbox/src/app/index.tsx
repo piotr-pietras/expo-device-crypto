@@ -120,6 +120,14 @@ export default function TestScreen() {
               value={EncryptionAlgorithm.RSA_2048_PKCS1}
             />
             <Picker.Item
+              label="RSA 4096 OAEP SHA1"
+              value={EncryptionAlgorithm.RSA_4096_OAEP_SHA1}
+            />
+            <Picker.Item
+              label="RSA 4096 PKCS1"
+              value={EncryptionAlgorithm.RSA_4096_PKCS1}
+            />
+            <Picker.Item
               label="ECIES P256 AES256 GCM"
               value={EncryptionAlgorithm.ECIES_P256_AES256_GCM}
             />
@@ -130,6 +138,14 @@ export default function TestScreen() {
             <Picker.Item
               label="SHA256withRSA/PSS"
               value={SigningAlgorithm.RSA_SHA256_PSS}
+            />
+            <Picker.Item
+              label="RSA 4096 SHA256"
+              value={SigningAlgorithm.RSA_4096_SHA256}
+            />
+            <Picker.Item
+              label="RSA 4096 SHA256/PSS"
+              value={SigningAlgorithm.RSA_4096_SHA256_PSS}
             />
           </Picker>
         </View>

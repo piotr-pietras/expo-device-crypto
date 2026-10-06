@@ -25,9 +25,13 @@ enum AlgorithmType: String {
   case ECDSA_SECP256R1_SHA256 = "ECDSA_SECP256R1_SHA256"
   case RSA_2048_PKCS1 = "RSA_2048_PKCS1"
   case RSA_2048_OAEP_SHA1 = "RSA_2048_OAEP_SHA1"
+  case RSA_4096_PKCS1 = "RSA_4096_PKCS1"
+  case RSA_4096_OAEP_SHA1 = "RSA_4096_OAEP_SHA1"
   case ECIES_P256_AES256_GCM = "ECIES_P256_AES256_GCM"
   case RSA_SHA256 = "RSA_SHA256"
   case RSA_SHA256_PSS = "RSA_SHA256_PSS"
+  case RSA_4096_SHA256 = "RSA_4096_SHA256"
+  case RSA_4096_SHA256_PSS = "RSA_4096_SHA256_PSS"
 }
 
 public class DeviceCryptoModule: Module {
@@ -39,92 +43,21 @@ public class DeviceCryptoModule: Module {
       return .rsaEncryptionPKCS1
     case .RSA_2048_OAEP_SHA1:
       return .rsaEncryptionOAEPSHA1
+    case .RSA_4096_PKCS1:
+      return .rsaEncryptionPKCS1
+    case .RSA_4096_OAEP_SHA1:
+      return .rsaEncryptionOAEPSHA1
     case .ECIES_P256_AES256_GCM:
       return .eciesEncryptionCofactorX963SHA256AESGCM
     case .RSA_SHA256:
       return .rsaSignatureMessagePKCS1v15SHA256
     case .RSA_SHA256_PSS:
       return .rsaSignatureMessagePSSSHA256
+    case .RSA_4096_SHA256:
+      return .rsaSignatureMessagePKCS1v15SHA256
+    case .RSA_4096_SHA256_PSS:
+      return .rsaSignatureMessagePSSSHA256
     }
-  }
-
-  // Converts ANSI x962 EC point to P‑256 SPKI DER format
-  private func x962ECPointToP256SPKI(_ publicKey: SecKey) -> Data? {
-    var error: Unmanaged<CFError>?
-    guard let raw = SecKeyCopyExternalRepresentation(publicKey, &error) as Data? else {
-      return nil
-    }
-
-    guard raw.count == 65 else { return nil }
-    let prefix = Data([
-      0x30, 0x59,
-      0x30, 0x13,
-      0x06, 0x07, 0x2A, 0x86, 0x48, 0xCE, 0x3D, 0x02, 0x01,
-      0x06, 0x08, 0x2A, 0x86, 0x48, 0xCE, 0x3D, 0x03, 0x01, 0x07,
-      0x03, 0x42, 0x00
-    ])
-    return prefix + raw
-  }
-
-  // Converts PKCS#1 RSA public key bytes to SPKI DER format.
-  private func rsaPKCS1ToSPKI(_ publicKey: SecKey) -> Data? {
-    guard let pkcs1 = SecKeyCopyExternalRepresentation(publicKey, nil) as Data? else {
-      return nil
-    }
-
-    // rsaEncryption OID: 1.2.840.113549.1.1.1 with NULL params
-    let algorithmIdentifier = Data([
-      0x30, 0x0D,
-      0x06, 0x09, 0x2A, 0x86, 0x48, 0x86, 0xF7, 0x0D, 0x01, 0x01, 0x01,
-      0x05, 0x00
-    ])
-
-    let bitStringPayload = Data([0x00]) + pkcs1
-    guard let bitString = asn1Wrap(tag: 0x03, content: bitStringPayload) else {
-      return nil
-    }
-
-    return asn1Wrap(tag: 0x30, content: algorithmIdentifier + bitString)
-  }
-
-  private func asn1Wrap(tag: UInt8, content: Data) -> Data? {
-    guard let length = asn1Length(content.count) else {
-      return nil
-    }
-    return Data([tag]) + length + content
-  }
-
-  private func asn1Length(_ length: Int) -> Data? {
-    if length < 0x80 {
-      return Data([UInt8(length)])
-    }
-
-    var value = length
-    var bytes: [UInt8] = []
-    while value > 0 {
-      bytes.insert(UInt8(value & 0xff), at: 0)
-      value >>= 8
-    }
-
-    guard bytes.count <= 4 else {
-      return nil
-    }
-
-    return Data([0x80 | UInt8(bytes.count)]) + Data(bytes)
-  }
-
-  // Converts P‑256 SPKI DER format to ANSI x962 EC point format.
-  private func spkiP256ToX962(_ spki: Data) -> Data? {
-    let prefix = Data([
-      0x30, 0x59,
-      0x30, 0x13,
-      0x06, 0x07, 0x2A, 0x86, 0x48, 0xCE, 0x3D, 0x02, 0x01,
-      0x06, 0x08, 0x2A, 0x86, 0x48, 0xCE, 0x3D, 0x03, 0x01, 0x07,
-      0x03, 0x42, 0x00
-    ])
-    guard spki.count == prefix.count + 65 else { return nil }
-    guard spki.starts(with: prefix) else { return nil }
-    return spki.suffix(65)
   }
 
   private func getSecKeyQuery(_ alias: String, keyClass: CFString, returnRef: Bool = true) -> [String: Any] {
@@ -185,7 +118,7 @@ public class DeviceCryptoModule: Module {
     return SecKeyCreateRandomKey(attributes, nil)
   }
 
-  private func buildRSA(alias: String, reqAuth: Bool, authMethod: AuthMethod) -> SecKey? {
+  private func buildRSA(alias: String, keySize: Int, reqAuth: Bool, authMethod: AuthMethod) -> SecKey? {
     let accessFlags: SecAccessControlCreateFlags
     if reqAuth {
       switch authMethod {
@@ -207,7 +140,7 @@ public class DeviceCryptoModule: Module {
 
     let attributes: NSDictionary = [
       kSecAttrKeyType: kSecAttrKeyTypeRSA,
-      kSecAttrKeySizeInBits: 2048,
+      kSecAttrKeySizeInBits: keySize,
       kSecPrivateKeyAttrs: [
           kSecAttrIsPermanent: true,
           kSecAttrApplicationTag: alias,
@@ -324,15 +257,23 @@ public class DeviceCryptoModule: Module {
       case .ECDSA_SECP256R1_SHA256:
         self.buildECDSA(alias: alias, reqAuth: reqAuth, authMethod: authMethod!)
       case .RSA_2048_PKCS1:
-        self.buildRSA(alias: alias, reqAuth: reqAuth, authMethod: authMethod!)
+        self.buildRSA(alias: alias, keySize: 2048, reqAuth: reqAuth, authMethod: authMethod!)
       case .RSA_2048_OAEP_SHA1:
-        self.buildRSA(alias: alias, reqAuth: reqAuth, authMethod: authMethod!)
+        self.buildRSA(alias: alias, keySize: 2048, reqAuth: reqAuth, authMethod: authMethod!)
+      case .RSA_4096_PKCS1:
+        self.buildRSA(alias: alias, keySize: 4096, reqAuth: reqAuth, authMethod: authMethod!)
+      case .RSA_4096_OAEP_SHA1:
+        self.buildRSA(alias: alias, keySize: 4096, reqAuth: reqAuth, authMethod: authMethod!)
       case .ECIES_P256_AES256_GCM:
         self.buildECIES(alias: alias, reqAuth: reqAuth, authMethod: authMethod!)
       case .RSA_SHA256:
-        self.buildRSA(alias: alias, reqAuth: reqAuth, authMethod: authMethod!)
+        self.buildRSA(alias: alias, keySize: 2048, reqAuth: reqAuth, authMethod: authMethod!)
       case .RSA_SHA256_PSS:
-        self.buildRSA(alias: alias, reqAuth: reqAuth, authMethod: authMethod!)
+        self.buildRSA(alias: alias, keySize: 2048, reqAuth: reqAuth, authMethod: authMethod!)
+      case .RSA_4096_SHA256:
+        self.buildRSA(alias: alias, keySize: 4096, reqAuth: reqAuth, authMethod: authMethod!)
+      case .RSA_4096_SHA256_PSS:
+        self.buildRSA(alias: alias, keySize: 4096, reqAuth: reqAuth, authMethod: authMethod!)
       default:
         throw NSError(
           domain: "DeviceCrypto",

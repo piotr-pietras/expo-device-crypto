@@ -19,15 +19,24 @@ export enum SigningAlgorithm {
   ECDSA_SECP256R1_SHA256 = "ECDSA_SECP256R1_SHA256",
   RSA_SHA256 = "RSA_SHA256",
   RSA_SHA256_PSS = "RSA_SHA256_PSS",
+  RSA_4096_SHA256 = "RSA_4096_SHA256",
+  RSA_4096_SHA256_PSS = "RSA_4096_SHA256_PSS",
 }
 
-type EciesAlgorithm = "ECIES_P256_AES256_GCM";
-type RsaAlgorithm = "RSA_2048_PKCS1" | "RSA_2048_OAEP_SHA1";
 export enum EncryptionAlgorithm {
   RSA_2048_PKCS1 = "RSA_2048_PKCS1",
   RSA_2048_OAEP_SHA1 = "RSA_2048_OAEP_SHA1",
+  RSA_4096_PKCS1 = "RSA_4096_PKCS1",
+  RSA_4096_OAEP_SHA1 = "RSA_4096_OAEP_SHA1",
   ECIES_P256_AES256_GCM = "ECIES_P256_AES256_GCM",
 }
+
+type EciesAlgorithm = EncryptionAlgorithm.ECIES_P256_AES256_GCM;
+type RsaAlgorithm =
+  | EncryptionAlgorithm.RSA_2048_PKCS1
+  | EncryptionAlgorithm.RSA_2048_OAEP_SHA1
+  | EncryptionAlgorithm.RSA_4096_PKCS1
+  | EncryptionAlgorithm.RSA_4096_OAEP_SHA1;
 
 export type GenerateKeyPairOptions = {
   /**
@@ -65,7 +74,7 @@ export type GenerateKeyPairOptions = {
    * @platform android 🤖
    */
   preferStrongBox?: boolean;
-}
+};
 
 type BaseAuthOptions = {
   /**
@@ -87,7 +96,7 @@ type BaseAuthOptions = {
    * @platform android 🤖
    */
   authMethod?: AuthMethod;
-}
+};
 
 type BaseSigningOptions = {
   /**

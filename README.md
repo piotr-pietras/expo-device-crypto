@@ -43,6 +43,7 @@ If you want to allow Face ID on iOS, add this to your app config:
         <strong>Curve:</strong> P-256 (secp256r1)<br>
         <strong>Symmetric cipher:</strong> AES-256-GCM<br>
         <strong>Key derivation:</strong> HKDF-SHA256 (32-byte key from ECDH shared secret)
+        <a href="https://github.com/piotr-pietras/expo-device-crypto/blob/master/examples/ecies.ts">see simple usage</a>
       </td>
     </tr>
     <tr>
@@ -71,11 +72,35 @@ If you want to allow Face ID on iOS, add this to your app config:
         <strong>Padding:</strong> PKCS#1 v1.5
       </td>
     </tr>
+    <tr>
+      <td>
+        <code>RSA_4096_SHA256</code><br>
+        <strong>Key size:</strong> 4096 bits<br>
+        <strong>Padding:</strong> PKCS#1 v1.5<br>
+        <strong>Hash:</strong> SHA-256
+      </td>
+      <td>
+        <code>RSA_4096_OAEP_SHA1</code><br>
+        <strong>Key size:</strong> 4096 bits<br>
+        <strong>Padding:</strong> OAEP with SHA-1 and MGF1
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <code>RSA_4096_SHA256_PSS</code><br>
+        <strong>Key size:</strong> 4096 bits<br>
+        <strong>Padding:</strong> RSA-PSS (MGF1)<br>
+        <strong>Hash:</strong> SHA-256
+      </td>
+      <td>
+        <code>RSA_4096_PKCS1</code><br>
+        <strong>Key size:</strong> 4096 bits<br>
+        <strong>Padding:</strong> PKCS#1 v1.5
+      </td>
+    </tr>
 
   </tbody>
 </table>
-
-**More coming soon...**
 
 ## Example
 
@@ -123,11 +148,13 @@ const decrypted = await DeviceCrypto.decrypt(alias, encrypted, {
 });
 ```
 
-> ⚠️ Because iOS Keychain/Secure Enclave binds authentication policy to key creation, `authMethod` must be set in `generateKeyPair`. On Android Keystore, authentication is applied at key usage time, so `authMethod` is provided in operations like `sign` and `decrypt`.
+> [!WARNING]
+> Because iOS Keychain/Secure Enclave binds authentication policy to key creation, `authMethod` must be set in `generateKeyPair`. On Android Keystore, authentication is applied at key usage time, so `authMethod` is provided in operations like `sign` and `decrypt`.
 
-### 📚 More examples
-
-**You can find additional usage examples in the [`examples` directory](https://github.com/piotr-pietras/expo-device-crypto/tree/master/examples) of the main repository.**
+> [!TIP]
+> ### 📚💡📦  More examples
+>
+> Looking for more examples? Browse the **[`examples` directory](https://github.com/piotr-pietras/expo-device-crypto/tree/master/examples)** for additional usage patterns (ECIES, signing, encryption, and more).
 
 ## Methods
 
