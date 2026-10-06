@@ -4,13 +4,13 @@ plugins {
 }
 
 group = 'expo.modules.devicecrypto'
-version = '1.0.1'
+version = '1.1.0'
 
 android {
   namespace "expo.modules.devicecrypto"
   defaultConfig {
     versionCode 1
-    versionName "1.0.1"
+    versionName "1.1.0"
   }
   lintOptions {
     abortOnError false
