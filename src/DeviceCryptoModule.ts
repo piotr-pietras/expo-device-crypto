@@ -64,6 +64,7 @@ export default {
       reqAuth: options?.requireAuthentication ?? false,
       authMethod: options?.authMethod ?? AuthMethod.PASSCODE_OR_BIOMETRIC,
       preferStrongBox: options?.preferStrongBox ?? false,
+      reqUnlocked: options?.requireUnlockedDevice ?? true,
     };
     return module.generateKeyPair(alias, o);
   },
