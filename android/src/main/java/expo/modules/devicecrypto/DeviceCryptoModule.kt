@@ -139,6 +139,7 @@ class DeviceCryptoModule : Module() {
     alias: String, 
     digest: String?,
     reqAuth: Boolean,
+    reqUnlocked: Boolean,
     strongBox: Boolean): KeyPairGenerator {
     val kpg: KeyPairGenerator = KeyPairGenerator.getInstance(
       KEY_ALGORITHM_EC,
@@ -154,6 +155,7 @@ class DeviceCryptoModule : Module() {
       }
       setIsStrongBoxBacked(strongBox)
       setUserAuthenticationRequired(reqAuth)
+      setUnlockedDeviceRequired(reqUnlocked)
       if (reqAuth) {
         setUserAuthenticationParameters(
           30, // 30 seconds
@@ -173,6 +175,7 @@ class DeviceCryptoModule : Module() {
     padding: String?,
     keySize: Int,
     reqAuth: Boolean,
+    reqUnlocked: Boolean,
     strongBox: Boolean): KeyPairGenerator {
     val kpg: KeyPairGenerator = KeyPairGenerator.getInstance(
       KEY_ALGORITHM_RSA,
@@ -198,6 +201,7 @@ class DeviceCryptoModule : Module() {
       setIsStrongBoxBacked(strongBox)
       setKeySize(keySize)
       setUserAuthenticationRequired(reqAuth)
+      setUnlockedDeviceRequired(reqUnlocked)
       if (reqAuth) {
         setUserAuthenticationParameters(
           30, // 30 seconds
@@ -214,6 +218,7 @@ class DeviceCryptoModule : Module() {
     alias: String,
     digest: String?,
     reqAuth: Boolean,
+    reqUnlocked: Boolean,
     strongBox: Boolean): KeyPairGenerator {
     val kpg: KeyPairGenerator = KeyPairGenerator.getInstance(
       KEY_ALGORITHM_EC,
@@ -229,6 +234,7 @@ class DeviceCryptoModule : Module() {
       }
       setIsStrongBoxBacked(strongBox)
       setUserAuthenticationRequired(reqAuth)
+      setUnlockedDeviceRequired(reqUnlocked)
       if (reqAuth) {
         setUserAuthenticationParameters(
           30, // 30 seconds
@@ -305,6 +311,7 @@ class DeviceCryptoModule : Module() {
 
   private fun generateKeyPair(alias: String, o: Map<String, Any?>): GenerateKeyPairResult {
     val reqAuth = o["reqAuth"] as Boolean
+    val reqUnlocked = o["reqUnlocked"] as Boolean
     if (reqAuth && isAuthCheckAvailable() != AuthCheckResult.AVAILABLE) {
       throw Exception("NO_AUTH_AVAILABLE")
     }
@@ -324,6 +331,7 @@ class DeviceCryptoModule : Module() {
         alias = alias,
         digest = DIGEST_SHA256,
         reqAuth = reqAuth,
+        reqUnlocked = reqUnlocked,
         strongBox = strongBox
       )
       AlgorithmType.RSA_2048_PKCS1 -> buildRSA(
@@ -333,6 +341,7 @@ class DeviceCryptoModule : Module() {
         padding = ENCRYPTION_PADDING_RSA_PKCS1,
         keySize = 2048,
         reqAuth = reqAuth,
+        reqUnlocked = reqUnlocked,
         strongBox = strongBox
       )
       AlgorithmType.RSA_2048_OAEP_SHA1 -> buildRSA(
@@ -342,6 +351,7 @@ class DeviceCryptoModule : Module() {
         padding = ENCRYPTION_PADDING_RSA_OAEP,
         keySize = 2048,
         reqAuth = reqAuth,
+        reqUnlocked = reqUnlocked,
         strongBox = strongBox
       )
       AlgorithmType.RSA_4096_PKCS1 -> buildRSA(
@@ -351,6 +361,7 @@ class DeviceCryptoModule : Module() {
         padding = ENCRYPTION_PADDING_RSA_PKCS1,
         keySize = 4096,
         reqAuth = reqAuth,
+        reqUnlocked = reqUnlocked,
         strongBox = strongBox
       )
       AlgorithmType.RSA_4096_OAEP_SHA1 -> buildRSA(
@@ -360,12 +371,14 @@ class DeviceCryptoModule : Module() {
         padding = ENCRYPTION_PADDING_RSA_OAEP,
         keySize = 4096,
         reqAuth = reqAuth,
+        reqUnlocked = reqUnlocked,
         strongBox = strongBox
       )
       AlgorithmType.ECIES_P256_AES256_GCM -> buildECIES(
         alias = alias,
         digest = null,
         reqAuth = reqAuth,
+        reqUnlocked = reqUnlocked,
         strongBox = strongBox
       )
       AlgorithmType.RSA_SHA256 -> buildRSA(
@@ -375,6 +388,7 @@ class DeviceCryptoModule : Module() {
         padding = SIGNATURE_PADDING_RSA_PKCS1,
         keySize = 2048,
         reqAuth = reqAuth,
+        reqUnlocked = reqUnlocked,
         strongBox = strongBox
       )
       AlgorithmType.RSA_SHA256_PSS -> buildRSA(
@@ -384,6 +398,7 @@ class DeviceCryptoModule : Module() {
         padding = SIGNATURE_PADDING_RSA_PSS,
         keySize = 2048,
         reqAuth = reqAuth,
+        reqUnlocked = reqUnlocked,
         strongBox = strongBox
       )
       AlgorithmType.RSA_4096_SHA256 -> buildRSA(
@@ -393,6 +408,7 @@ class DeviceCryptoModule : Module() {
         padding = SIGNATURE_PADDING_RSA_PKCS1,
         keySize = 4096,
         reqAuth = reqAuth,
+        reqUnlocked = reqUnlocked,
         strongBox = strongBox
       )
       AlgorithmType.RSA_4096_SHA256_PSS -> buildRSA(
@@ -402,6 +418,7 @@ class DeviceCryptoModule : Module() {
         padding = SIGNATURE_PADDING_RSA_PSS,
         keySize = 4096,
         reqAuth = reqAuth,
+        reqUnlocked = reqUnlocked,
         strongBox = strongBox
       )
       else -> throw Exception("INVALID_ALGORITHM_TYPE")

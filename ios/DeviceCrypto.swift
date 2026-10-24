@@ -80,7 +80,7 @@ public class DeviceCryptoModule: Module {
     return (item as! SecKey)
   }
 
-  private func buildECDSA(alias: String, reqAuth: Bool, authMethod: AuthMethod) -> SecKey? {
+  private func buildECDSA(alias: String, reqAuth: Bool, authMethod: AuthMethod, reqUnlocked: Bool) -> SecKey? {
     let accessFlags: SecAccessControlCreateFlags
     if reqAuth {
       switch authMethod {
@@ -93,9 +93,13 @@ public class DeviceCryptoModule: Module {
       accessFlags = .privateKeyUsage
     }
 
+    let lockPolicy = reqUnlocked
+      ? kSecAttrAccessibleWhenUnlockedThisDeviceOnly
+      : kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly;
+
     let access = SecAccessControlCreateWithFlags(
       kCFAllocatorDefault,
-      kSecAttrAccessibleWhenUnlockedThisDeviceOnly,
+      lockPolicy,
       accessFlags,
       nil
     ) 
@@ -118,7 +122,7 @@ public class DeviceCryptoModule: Module {
     return SecKeyCreateRandomKey(attributes, nil)
   }
 
-  private func buildRSA(alias: String, keySize: Int, reqAuth: Bool, authMethod: AuthMethod) -> SecKey? {
+  private func buildRSA(alias: String, keySize: Int, reqAuth: Bool, authMethod: AuthMethod, reqUnlocked: Bool) -> SecKey? {
     let accessFlags: SecAccessControlCreateFlags
     if reqAuth {
       switch authMethod {
@@ -131,9 +135,13 @@ public class DeviceCryptoModule: Module {
       accessFlags = []
     }
 
+    let lockPolicy = reqUnlocked
+      ? kSecAttrAccessibleWhenUnlockedThisDeviceOnly
+      : kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly;
+
     let access = SecAccessControlCreateWithFlags(
       kCFAllocatorDefault,
-      kSecAttrAccessibleWhenUnlockedThisDeviceOnly,
+      lockPolicy,
       accessFlags,
       nil
     ) 
@@ -155,7 +163,7 @@ public class DeviceCryptoModule: Module {
     return SecKeyCreateRandomKey(attributes, nil)
   }
 
-  private func buildECIES(alias: String, reqAuth: Bool, authMethod: AuthMethod) -> SecKey? {
+  private func buildECIES(alias: String, reqAuth: Bool, authMethod: AuthMethod, reqUnlocked: Bool) -> SecKey? {
     let accessFlags: SecAccessControlCreateFlags
     if reqAuth {
       switch authMethod {
@@ -168,9 +176,13 @@ public class DeviceCryptoModule: Module {
       accessFlags = .privateKeyUsage
     }
 
+    let lockPolicy = reqUnlocked
+      ? kSecAttrAccessibleWhenUnlockedThisDeviceOnly
+      : kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly;
+
     let access = SecAccessControlCreateWithFlags(
       kCFAllocatorDefault,
-      kSecAttrAccessibleWhenUnlockedThisDeviceOnly,
+      lockPolicy,
       accessFlags,
       nil
     )
@@ -237,6 +249,7 @@ public class DeviceCryptoModule: Module {
 
   private func generateKeyPair(alias: String, o: [String: Any]) throws -> String {
     let reqAuth = o["reqAuth"] as! Bool
+    let reqUnlocked = o["reqUnlocked"] as! Bool
     let authMethod = AuthMethod(rawValue: o["authMethod"] as! String)
     let algoType = AlgorithmType(rawValue: o["algoType"] as! String)
 
@@ -255,25 +268,25 @@ public class DeviceCryptoModule: Module {
 
     switch algoType {
       case .ECDSA_SECP256R1_SHA256:
-        self.buildECDSA(alias: alias, reqAuth: reqAuth, authMethod: authMethod!)
+        self.buildECDSA(alias: alias, reqAuth: reqAuth, authMethod: authMethod!, reqUnlocked: reqUnlocked)
       case .RSA_2048_PKCS1:
-        self.buildRSA(alias: alias, keySize: 2048, reqAuth: reqAuth, authMethod: authMethod!)
+        self.buildRSA(alias: alias, keySize: 2048, reqAuth: reqAuth, authMethod: authMethod!, reqUnlocked: reqUnlocked)
       case .RSA_2048_OAEP_SHA1:
-        self.buildRSA(alias: alias, keySize: 2048, reqAuth: reqAuth, authMethod: authMethod!)
+        self.buildRSA(alias: alias, keySize: 2048, reqAuth: reqAuth, authMethod: authMethod!, reqUnlocked: reqUnlocked)
       case .RSA_4096_PKCS1:
-        self.buildRSA(alias: alias, keySize: 4096, reqAuth: reqAuth, authMethod: authMethod!)
+        self.buildRSA(alias: alias, keySize: 4096, reqAuth: reqAuth, authMethod: authMethod!, reqUnlocked: reqUnlocked)
       case .RSA_4096_OAEP_SHA1:
-        self.buildRSA(alias: alias, keySize: 4096, reqAuth: reqAuth, authMethod: authMethod!)
+        self.buildRSA(alias: alias, keySize: 4096, reqAuth: reqAuth, authMethod: authMethod!, reqUnlocked: reqUnlocked)
       case .ECIES_P256_AES256_GCM:
-        self.buildECIES(alias: alias, reqAuth: reqAuth, authMethod: authMethod!)
+        self.buildECIES(alias: alias, reqAuth: reqAuth, authMethod: authMethod!, reqUnlocked: reqUnlocked)
       case .RSA_SHA256:
-        self.buildRSA(alias: alias, keySize: 2048, reqAuth: reqAuth, authMethod: authMethod!)
+        self.buildRSA(alias: alias, keySize: 2048, reqAuth: reqAuth, authMethod: authMethod!, reqUnlocked: reqUnlocked)
       case .RSA_SHA256_PSS:
-        self.buildRSA(alias: alias, keySize: 2048, reqAuth: reqAuth, authMethod: authMethod!)
+        self.buildRSA(alias: alias, keySize: 2048, reqAuth: reqAuth, authMethod: authMethod!, reqUnlocked: reqUnlocked)
       case .RSA_4096_SHA256:
-        self.buildRSA(alias: alias, keySize: 4096, reqAuth: reqAuth, authMethod: authMethod!)
+        self.buildRSA(alias: alias, keySize: 4096, reqAuth: reqAuth, authMethod: authMethod!, reqUnlocked: reqUnlocked)
       case .RSA_4096_SHA256_PSS:
-        self.buildRSA(alias: alias, keySize: 4096, reqAuth: reqAuth, authMethod: authMethod!)
+        self.buildRSA(alias: alias, keySize: 4096, reqAuth: reqAuth, authMethod: authMethod!, reqUnlocked: reqUnlocked)
       default:
         throw NSError(
           domain: "DeviceCrypto",

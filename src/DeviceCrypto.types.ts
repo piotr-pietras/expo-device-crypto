@@ -74,6 +74,11 @@ export type GenerateKeyPairOptions = {
    * @platform android 🤖
    */
   preferStrongBox?: boolean;
+  /**
+   * Whether to require the device to be unlocked to use the key pair.
+   * @default true
+   */
+  requireUnlockedDevice?: boolean;
 };
 
 type BaseAuthOptions = {

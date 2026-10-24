@@ -25,6 +25,8 @@ export default function TestScreen() {
   const [preferStrongBox, setPreferStrongBox] = useState<boolean>(false);
   const [requireAuthentication, setRequireAuthentication] =
     useState<boolean>(false);
+  const [requireUnlockedDevice, setRequireUnlockedDevice] =
+    useState<boolean>(true);
   const [removedCount, setRemovedCount] = useState<number>(0);
   const [alias, setAlias] = useState<string>("key-pair-alias");
   const [generated, setGenerated] = useState<string>("");
@@ -93,6 +95,13 @@ export default function TestScreen() {
           <Switch
             value={requireAuthentication}
             onValueChange={setRequireAuthentication}
+          />
+        </View>
+        <View style={styleInline}>
+          <Text>Require Unlocked Device</Text>
+          <Switch
+            value={requireUnlockedDevice}
+            onValueChange={setRequireUnlockedDevice}
           />
         </View>
         <View style={styleInline}>
@@ -167,6 +176,7 @@ export default function TestScreen() {
             DeviceCrypto.generateKeyPair(alias, {
               requireAuthentication,
               algorithmType: algoType,
+              requireUnlockedDevice,
               preferStrongBox,
             })
               .then((result) => {
@@ -323,6 +333,7 @@ export default function TestScreen() {
           onChangeText={setPeerPublicKey}
         />
       </Group>
+      <View style={{height: 500}}/>
     </ScrollView>
   );
 }
