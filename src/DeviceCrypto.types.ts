@@ -29,9 +29,12 @@ export enum EncryptionAlgorithm {
   RSA_4096_PKCS1 = "RSA_4096_PKCS1",
   RSA_4096_OAEP_SHA1 = "RSA_4096_OAEP_SHA1",
   ECIES_P256_AES256_GCM = "ECIES_P256_AES256_GCM",
+  ECIES_P256_CHACHA20_POLY1305 = "ECIES_P256_CHACHA20_POLY1305",
 }
 
-type EciesAlgorithm = EncryptionAlgorithm.ECIES_P256_AES256_GCM;
+type EciesAlgorithm =
+  | EncryptionAlgorithm.ECIES_P256_AES256_GCM
+  | EncryptionAlgorithm.ECIES_P256_CHACHA20_POLY1305;
 type RsaAlgorithm =
   | EncryptionAlgorithm.RSA_2048_PKCS1
   | EncryptionAlgorithm.RSA_2048_OAEP_SHA1

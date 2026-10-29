@@ -141,6 +141,10 @@ export default function TestScreen() {
               value={EncryptionAlgorithm.ECIES_P256_AES256_GCM}
             />
             <Picker.Item
+              label="ECIES P256 ChaCha20 Poly1305"
+              value={EncryptionAlgorithm.ECIES_P256_CHACHA20_POLY1305}
+            />
+            <Picker.Item
               label="SHA256withRSA"
               value={SigningAlgorithm.RSA_SHA256}
             />
