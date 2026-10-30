@@ -80,7 +80,7 @@ public class DeviceCryptoModule: Module {
     return (item as! SecKey)
   }
 
-  private func buildECDSA(alias: String, reqAuth: Bool, authMethod: AuthMethod, reqUnlocked: Bool) -> SecKey? {
+  private func buildECDSA(alias: String, reqAuth: Bool, authMethod: AuthMethod, reqUnlocked: Bool) {
     let accessFlags: SecAccessControlCreateFlags
     if reqAuth {
       switch authMethod {
@@ -102,7 +102,7 @@ public class DeviceCryptoModule: Module {
       lockPolicy,
       accessFlags,
       nil
-    ) 
+    )!
 
     let attributes: NSDictionary = [
       kSecAttrKeyType: kSecAttrKeyTypeECSECPrimeRandom,
@@ -119,10 +119,10 @@ public class DeviceCryptoModule: Module {
       ]
     ]
 
-    return SecKeyCreateRandomKey(attributes, nil)
+    _ = SecKeyCreateRandomKey(attributes, nil)
   }
 
-  private func buildRSA(alias: String, keySize: Int, reqAuth: Bool, authMethod: AuthMethod, reqUnlocked: Bool) -> SecKey? {
+  private func buildRSA(alias: String, keySize: Int, reqAuth: Bool, authMethod: AuthMethod, reqUnlocked: Bool) {
     let accessFlags: SecAccessControlCreateFlags
     if reqAuth {
       switch authMethod {
@@ -144,7 +144,7 @@ public class DeviceCryptoModule: Module {
       lockPolicy,
       accessFlags,
       nil
-    ) 
+    )!
 
     let attributes: NSDictionary = [
       kSecAttrKeyType: kSecAttrKeyTypeRSA,
@@ -160,10 +160,10 @@ public class DeviceCryptoModule: Module {
       ]
     ]
 
-    return SecKeyCreateRandomKey(attributes, nil)
+    _ = SecKeyCreateRandomKey(attributes, nil)
   }
 
-  private func buildECIES(alias: String, reqAuth: Bool, authMethod: AuthMethod, reqUnlocked: Bool) -> SecKey? {
+  private func buildECIES(alias: String, reqAuth: Bool, authMethod: AuthMethod, reqUnlocked: Bool) {
     let accessFlags: SecAccessControlCreateFlags
     if reqAuth {
       switch authMethod {
@@ -185,7 +185,7 @@ public class DeviceCryptoModule: Module {
       lockPolicy,
       accessFlags,
       nil
-    )
+    )!
 
     let attributes: NSDictionary = [
       kSecAttrKeyType: kSecAttrKeyTypeECSECPrimeRandom,
@@ -202,7 +202,7 @@ public class DeviceCryptoModule: Module {
       ]
     ]
 
-    return SecKeyCreateRandomKey(attributes, nil)
+    _ = SecKeyCreateRandomKey(attributes, nil)
   }
 
   private func secKeyFromPeerPublicKey(_ peerPublicKey: String) -> SecKey? {
