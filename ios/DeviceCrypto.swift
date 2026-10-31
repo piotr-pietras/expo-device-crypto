@@ -85,7 +85,7 @@ public class DeviceCryptoModule: Module {
     return (item as! SecKey)
   }
 
-  private func buildECDSA(alias: String, reqAuth: Bool, authMethod: AuthMethod, reqUnlocked: Bool) {
+  private func buildECDSA(alias: String, reqAuth: Bool, authMethod: AuthMethod, reqUnlocked: Bool) throws {
     let accessFlags: SecAccessControlCreateFlags
     if reqAuth {
       switch authMethod {
@@ -124,10 +124,13 @@ public class DeviceCryptoModule: Module {
       ]
     ]
 
-    _ = SecKeyCreateRandomKey(attributes, nil)
+    var error: Unmanaged<CFError>?
+    guard SecKeyCreateRandomKey(attributes, &error) != nil else {
+      throw error!.takeRetainedValue()
+    }
   }
 
-  private func buildRSA(alias: String, keySize: Int, reqAuth: Bool, authMethod: AuthMethod, reqUnlocked: Bool) {
+  private func buildRSA(alias: String, keySize: Int, reqAuth: Bool, authMethod: AuthMethod, reqUnlocked: Bool) throws {
     let accessFlags: SecAccessControlCreateFlags
     if reqAuth {
       switch authMethod {
@@ -165,10 +168,13 @@ public class DeviceCryptoModule: Module {
       ]
     ]
 
-    _ = SecKeyCreateRandomKey(attributes, nil)
+    var error: Unmanaged<CFError>?
+    guard SecKeyCreateRandomKey(attributes, &error) != nil else {
+      throw error!.takeRetainedValue()
+    }
   }
 
-  private func buildECIES(alias: String, reqAuth: Bool, authMethod: AuthMethod, reqUnlocked: Bool) {
+  private func buildECIES(alias: String, reqAuth: Bool, authMethod: AuthMethod, reqUnlocked: Bool) throws {
     let accessFlags: SecAccessControlCreateFlags
     if reqAuth {
       switch authMethod {
@@ -207,7 +213,10 @@ public class DeviceCryptoModule: Module {
       ]
     ]
 
-    _ = SecKeyCreateRandomKey(attributes, nil)
+    var error: Unmanaged<CFError>?
+    guard SecKeyCreateRandomKey(attributes, &error) != nil else {
+      throw error!.takeRetainedValue()
+    }
   }
 
   private func secKeyFromPeerPublicKey(_ peerPublicKey: String) -> SecKey? {
@@ -273,27 +282,27 @@ public class DeviceCryptoModule: Module {
 
     switch algoType {
       case .ECDSA_SECP256R1_SHA256:
-        self.buildECDSA(alias: alias, reqAuth: reqAuth, authMethod: authMethod!, reqUnlocked: reqUnlocked)
+        try self.buildECDSA(alias: alias, reqAuth: reqAuth, authMethod: authMethod!, reqUnlocked: reqUnlocked)
       case .RSA_2048_PKCS1:
-        self.buildRSA(alias: alias, keySize: 2048, reqAuth: reqAuth, authMethod: authMethod!, reqUnlocked: reqUnlocked)
+        try self.buildRSA(alias: alias, keySize: 2048, reqAuth: reqAuth, authMethod: authMethod!, reqUnlocked: reqUnlocked)
       case .RSA_2048_OAEP_SHA1:
-        self.buildRSA(alias: alias, keySize: 2048, reqAuth: reqAuth, authMethod: authMethod!, reqUnlocked: reqUnlocked)
+        try self.buildRSA(alias: alias, keySize: 2048, reqAuth: reqAuth, authMethod: authMethod!, reqUnlocked: reqUnlocked)
       case .RSA_4096_PKCS1:
-        self.buildRSA(alias: alias, keySize: 4096, reqAuth: reqAuth, authMethod: authMethod!, reqUnlocked: reqUnlocked)
+        try self.buildRSA(alias: alias, keySize: 4096, reqAuth: reqAuth, authMethod: authMethod!, reqUnlocked: reqUnlocked)
       case .RSA_4096_OAEP_SHA1:
-        self.buildRSA(alias: alias, keySize: 4096, reqAuth: reqAuth, authMethod: authMethod!, reqUnlocked: reqUnlocked)
+        try self.buildRSA(alias: alias, keySize: 4096, reqAuth: reqAuth, authMethod: authMethod!, reqUnlocked: reqUnlocked)
       case .ECIES_P256_AES256_GCM:
-        self.buildECIES(alias: alias, reqAuth: reqAuth, authMethod: authMethod!, reqUnlocked: reqUnlocked)
-      case .ECIES_P256_CHACHA20_POLY1305: 
-        self.buildECIES(alias: alias, reqAuth: reqAuth, authMethod: authMethod!, reqUnlocked: reqUnlocked)
+        try self.buildECIES(alias: alias, reqAuth: reqAuth, authMethod: authMethod!, reqUnlocked: reqUnlocked)
+      case .ECIES_P256_CHACHA20_POLY1305:
+        try self.buildECIES(alias: alias, reqAuth: reqAuth, authMethod: authMethod!, reqUnlocked: reqUnlocked)
       case .RSA_SHA256:
-        self.buildRSA(alias: alias, keySize: 2048, reqAuth: reqAuth, authMethod: authMethod!, reqUnlocked: reqUnlocked)
+        try self.buildRSA(alias: alias, keySize: 2048, reqAuth: reqAuth, authMethod: authMethod!, reqUnlocked: reqUnlocked)
       case .RSA_SHA256_PSS:
-        self.buildRSA(alias: alias, keySize: 2048, reqAuth: reqAuth, authMethod: authMethod!, reqUnlocked: reqUnlocked)
+        try self.buildRSA(alias: alias, keySize: 2048, reqAuth: reqAuth, authMethod: authMethod!, reqUnlocked: reqUnlocked)
       case .RSA_4096_SHA256:
-        self.buildRSA(alias: alias, keySize: 4096, reqAuth: reqAuth, authMethod: authMethod!, reqUnlocked: reqUnlocked)
+        try self.buildRSA(alias: alias, keySize: 4096, reqAuth: reqAuth, authMethod: authMethod!, reqUnlocked: reqUnlocked)
       case .RSA_4096_SHA256_PSS:
-        self.buildRSA(alias: alias, keySize: 4096, reqAuth: reqAuth, authMethod: authMethod!, reqUnlocked: reqUnlocked)
+        try self.buildRSA(alias: alias, keySize: 4096, reqAuth: reqAuth, authMethod: authMethod!, reqUnlocked: reqUnlocked)
       default:
         throw NSError(
           domain: "DeviceCrypto",
