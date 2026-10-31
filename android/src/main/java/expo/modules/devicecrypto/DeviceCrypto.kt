@@ -366,7 +366,7 @@ class DeviceCryptoModule : Module() {
         keySize = 4096,
         reqAuth = reqAuth,
         reqUnlocked = reqUnlocked,
-        strongBox = strongBox
+        strongBox = false
       )
       AlgorithmType.RSA_4096_OAEP_SHA1 -> buildRSA(
         alias = alias,
@@ -376,7 +376,7 @@ class DeviceCryptoModule : Module() {
         keySize = 4096,
         reqAuth = reqAuth,
         reqUnlocked = reqUnlocked,
-        strongBox = strongBox
+        strongBox = false
       )
       AlgorithmType.ECIES_P256_AES256_GCM -> buildECIES(
         alias = alias,
@@ -420,7 +420,7 @@ class DeviceCryptoModule : Module() {
         keySize = 4096,
         reqAuth = reqAuth,
         reqUnlocked = reqUnlocked,
-        strongBox = strongBox
+        strongBox = false
       )
       AlgorithmType.RSA_4096_SHA256_PSS -> buildRSA(
         alias = alias,
@@ -430,7 +430,7 @@ class DeviceCryptoModule : Module() {
         keySize = 4096,
         reqAuth = reqAuth,
         reqUnlocked = reqUnlocked,
-        strongBox = strongBox
+        strongBox = false
       )
       else -> throw Exception("INVALID_ALGORITHM_TYPE")
     }
