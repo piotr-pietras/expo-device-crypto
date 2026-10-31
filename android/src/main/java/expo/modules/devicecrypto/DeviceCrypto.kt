@@ -33,6 +33,7 @@ import expo.modules.kotlin.types.Enumerable
 import java.security.KeyFactory
 import java.security.KeyPairGenerator
 import java.security.KeyStore
+import java.security.SecureRandom
 import java.security.Signature
 import java.security.spec.AlgorithmParameterSpec
 import java.security.spec.MGF1ParameterSpec
@@ -41,6 +42,7 @@ import javax.crypto.Cipher
 import javax.crypto.KeyAgreement
 import javax.crypto.Mac
 import javax.crypto.spec.GCMParameterSpec
+import javax.crypto.spec.IvParameterSpec
 import javax.crypto.spec.OAEPParameterSpec
 import javax.crypto.spec.PSource
 import javax.crypto.spec.SecretKeySpec
@@ -70,6 +72,7 @@ enum class AlgorithmType {
   RSA_4096_PKCS1,
   RSA_4096_OAEP_SHA1,
   ECIES_P256_AES256_GCM,
+  ECIES_P256_CHACHA20_POLY1305,
   RSA_SHA256,
   RSA_SHA256_PSS,
   RSA_4096_SHA256,
@@ -90,6 +93,7 @@ class DeviceCryptoModule : Module() {
       AlgorithmType.RSA_2048_OAEP_SHA1 -> "RSA/ECB/OAEPwithSHA-1AndMGF1Padding"
       AlgorithmType.RSA_4096_OAEP_SHA1 -> "RSA/ECB/OAEPwithSHA-1AndMGF1Padding"
       AlgorithmType.ECIES_P256_AES256_GCM -> "AES/GCM/NoPadding"
+      AlgorithmType.ECIES_P256_CHACHA20_POLY1305 -> "ChaCha20/Poly1305/NoPadding"
       AlgorithmType.RSA_SHA256 -> "SHA256withRSA"
       AlgorithmType.RSA_4096_SHA256 -> "SHA256withRSA"
       AlgorithmType.RSA_SHA256_PSS -> "SHA256withRSA/PSS"
@@ -381,6 +385,13 @@ class DeviceCryptoModule : Module() {
         reqUnlocked = reqUnlocked,
         strongBox = strongBox
       )
+      AlgorithmType.ECIES_P256_CHACHA20_POLY1305 -> buildECIES(
+        alias = alias,
+        digest = null,
+        reqAuth = reqAuth,
+        reqUnlocked = reqUnlocked,
+        strongBox = strongBox
+      )
       AlgorithmType.RSA_SHA256 -> buildRSA(
         alias = alias,
         digest = DIGEST_SHA256,
@@ -560,16 +571,23 @@ class DeviceCryptoModule : Module() {
           val payload = cipher.iv + encrypted
           promise.resolve(Base64.encodeToString(payload, Base64.NO_WRAP))
         }
+        AlgorithmType.ECIES_P256_CHACHA20_POLY1305 -> {
+          val peerPublicKey = o["peerPublicKey"] as String
+          val sharedSecret = deriveSharedSecret(entry, peerPublicKey)
+          val chachaKey = SecretKeySpec(hkdfSha256(sharedSecret, 32), "ChaCha20")
+          val nonce = ByteArray(12).also { SecureRandom().nextBytes(it) }
+          cipher.init(Cipher.ENCRYPT_MODE, chachaKey, IvParameterSpec(nonce))
+          val encrypted = cipher.doFinal(data.toByteArray(Charsets.UTF_8))
+          val payload = nonce + encrypted
+          promise.resolve(Base64.encodeToString(payload, Base64.NO_WRAP))
+        }
         else -> {
           throw Exception("INVALID_ALGORITHM_TYPE")
         }
       }
     }
 
-    if (algoType != AlgorithmType.ECIES_P256_AES256_GCM) {
-      runEncryption(cipher)
-      return
-    } else if (!reqAuth) {
+    if (!reqAuth) {
       runEncryption(cipher)
       return
     } else {
@@ -630,6 +648,17 @@ class DeviceCryptoModule : Module() {
           val encryptedPayload = ciphertext.copyOfRange(12, ciphertext.size)
           val gcmSpec = GCMParameterSpec(128, iv)
           cipher.init(Cipher.DECRYPT_MODE, aesKey, gcmSpec)
+          val decrypted = cipher.doFinal(encryptedPayload)
+          promise.resolve(String(decrypted, Charsets.UTF_8))
+          return
+        }
+        AlgorithmType.ECIES_P256_CHACHA20_POLY1305 -> {
+          val peerPublicKey = o["peerPublicKey"] as String
+          val sharedSecret = deriveSharedSecret(entry, peerPublicKey)
+          val chachaKey = SecretKeySpec(hkdfSha256(sharedSecret, 32), "ChaCha20")
+          val nonce = ciphertext.copyOfRange(0, 12)
+          val encryptedPayload = ciphertext.copyOfRange(12, ciphertext.size)
+          cipher.init(Cipher.DECRYPT_MODE, chachaKey, IvParameterSpec(nonce))
           val decrypted = cipher.doFinal(encryptedPayload)
           promise.resolve(String(decrypted, Charsets.UTF_8))
           return
