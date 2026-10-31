@@ -6,7 +6,7 @@ import DeviceCrypto, {
 
 const alias = "user-signing-key";
 const payload = "Sign this challenge payload";
-const algorithmType = SigningAlgorithm.SHA256withRSA;
+const algorithmType = SigningAlgorithm.RSA_SHA256;
 const authMethod = AuthMethod.PASSCODE_OR_BIOMETRIC;
 
 // 1) Ensure device authentication is configured (passcode at minimum)

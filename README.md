@@ -42,8 +42,8 @@ If you want to allow Face ID on iOS, add this to your app config:
         <code>ECIES_P256_AES256_GCM</code><br>
         <strong>Curve:</strong> P-256 (secp256r1)<br>
         <strong>Symmetric cipher:</strong> AES-256-GCM<br>
-        <strong>Key derivation:</strong> HKDF-SHA256 (32-byte key from ECDH shared secret)
-        <a href="https://github.com/piotr-pietras/expo-device-crypto/blob/master/examples/ecies.ts">see simple usage</a>
+        <strong>Key derivation:</strong> HKDF-SHA256 (zero salt, 32-byte key from ECDH shared secret)<br>
+        <a href="https://github.com/piotr-pietras/expo-device-crypto/blob/master/examples/ecies.ts">💡see simple usage</a>
       </td>
     </tr>
     <tr>
@@ -54,9 +54,10 @@ If you want to allow Face ID on iOS, add this to your app config:
         <strong>Hash:</strong> SHA-256
       </td>
       <td>
-        <code>RSA_2048_OAEP_SHA1</code><br>
-        <strong>Key size:</strong> 2048 bits<br>
-        <strong>Padding:</strong> OAEP with SHA-1 and MGF1
+        <code>ECIES_P256_CHACHA20_POLY1305</code><br>
+        <strong>Curve:</strong> P-256 (secp256r1)<br>
+        <strong>Symmetric cipher:</strong> ChaCha20-Poly1305<br>
+        <strong>Key derivation:</strong> HKDF-SHA256 (zero salt, 32-byte key from ECDH shared secret)<br>
       </td>
     </tr>
     <tr>
@@ -67,9 +68,9 @@ If you want to allow Face ID on iOS, add this to your app config:
         <strong>Hash:</strong> SHA-256
       </td>
       <td>
-        <code>RSA_2048_PKCS1</code><br>
+        <code>RSA_2048_OAEP_SHA1</code><br>
         <strong>Key size:</strong> 2048 bits<br>
-        <strong>Padding:</strong> PKCS#1 v1.5
+        <strong>Padding:</strong> OAEP with SHA-1 and MGF1
       </td>
     </tr>
     <tr>
@@ -80,9 +81,9 @@ If you want to allow Face ID on iOS, add this to your app config:
         <strong>Hash:</strong> SHA-256
       </td>
       <td>
-        <code>RSA_4096_OAEP_SHA1</code><br>
-        <strong>Key size:</strong> 4096 bits<br>
-        <strong>Padding:</strong> OAEP with SHA-1 and MGF1
+        <code>RSA_2048_PKCS1</code><br>
+        <strong>Key size:</strong> 2048 bits<br>
+        <strong>Padding:</strong> PKCS#1 v1.5
       </td>
     </tr>
     <tr>
@@ -92,6 +93,14 @@ If you want to allow Face ID on iOS, add this to your app config:
         <strong>Padding:</strong> RSA-PSS (MGF1)<br>
         <strong>Hash:</strong> SHA-256
       </td>
+      <td>
+        <code>RSA_4096_OAEP_SHA1</code><br>
+        <strong>Key size:</strong> 4096 bits<br>
+        <strong>Padding:</strong> OAEP with SHA-1 and MGF1
+      </td>
+    </tr>
+    <tr>
+      <td></td>
       <td>
         <code>RSA_4096_PKCS1</code><br>
         <strong>Key size:</strong> 4096 bits<br>
@@ -154,7 +163,7 @@ const decrypted = await DeviceCrypto.decrypt(alias, encrypted, {
 > [!TIP]
 > ### 📚💡📦  More examples
 >
-> Looking for more examples? Browse the **[`examples` directory](https://github.com/piotr-pietras/expo-device-crypto/tree/master/examples)** for additional usage patterns (ECIES, signing, encryption, and more).
+> Looking for more examples? Browse the **[`examples directory`](https://github.com/piotr-pietras/expo-device-crypto/tree/master/examples)** for additional usage patterns (ECIES, signing, encryption, and more).
 
 ## Methods
 
@@ -187,12 +196,12 @@ const decrypted = await DeviceCrypto.decrypt(alias, encrypted, {
 - `encrypt(alias: string, data: string, options?: EncryptOptions): Promise<string | null>`
   - Encrypts UTF-8 `data` with public key.
   - Default: `algorithmType = RSA_2048_PKCS1`.
-  - For `algorithmType = ECIES_P256_AES256_GCM`, `peerPublicKey` is required in `options`.
+  - For `algorithmType = ECIES_P256_AES256_GCM` or `ECIES_P256_CHACHA20_POLY1305`, `peerPublicKey` is required in `options`.
 
 - `decrypt(alias: string, data: string, options?: DecryptOptions): Promise<string | null>`
   - Decrypts Base64 `data` with private key.
   - Defaults: `algorithmType = RSA_2048_PKCS1`, `promptTitle = "Unlock"`, `promptSubtitle = "Enter your PIN to continue"`, `authMethod = PASSCODE_OR_BIOMETRIC`.
-  - For `algorithmType = ECIES_P256_AES256_GCM`, `peerPublicKey` is required in `options`.
+  - For `algorithmType = ECIES_P256_AES256_GCM` or `ECIES_P256_CHACHA20_POLY1305`, `peerPublicKey` is required in `options`.
 
 **Android only methods**
 
@@ -201,7 +210,16 @@ const decrypted = await DeviceCrypto.decrypt(alias, encrypted, {
 
 ## Important
 
-### Enable Strong Box on Android
+### 🤖 Android version requirements
+
+Key generation and biometric prompts call Android APIs that are newer than the `minSdk` many Expo apps still use (often 24). This module does not guard those calls, so on older phones they crash instead of returning an error.
+
+- Every `generateKeyPair` calls `setUnlockedDeviceRequired` and `setIsStrongBoxBacked`, which need Android 9 (API 28).
+- `requireAuthentication: true` also calls `setUserAuthenticationParameters`, which needs Android 11 (API 30).
+- Auth prompts for `sign`, `encrypt`, and `decrypt` use `BiometricPrompt` with `DEVICE_CREDENTIAL` (`PASSCODE` or `PASSCODE_OR_BIOMETRIC`). That combination needs Android 11 (API 30).
+- ECIES key generation uses `PURPOSE_AGREE_KEY`, which needs Android 12 (API 31).
+
+### 🤖 Enable Strong Box on Android
 
 Use `preferStrongBox: true` when generating a key pair to request [StrongBox-backed](https://developer.android.com/privacy-and-security/keystore#StrongBoxKeyMint) key storage when the device supports it.
 
@@ -221,10 +239,12 @@ await DeviceCrypto.generateKeyPair(alias, {
 
 If StrongBox is not available, Android falls back to the Trusted Execution Environment (TEE).
 
-### Secure Enclave support on iOS
+RSA-4096 is always stored in the TEE. [StrongBox only supports RSA 2048](https://developer.android.com/privacy-and-security/keystore?hl=pl#StrongBoxKeyMint), so `preferStrongBox` is ignored for `RSA_4096_PKCS1`, `RSA_4096_OAEP_SHA1`, `RSA_4096_SHA256`, and `RSA_4096_SHA256_PSS`.
 
-On iOS, only ECDSA keys can use the [Secure Enclave processor](https://developer.apple.com/documentation/security/ksecattrtokenidsecureenclave?utm_source=chatgpt.com#Discussion). RSA private-key operations are software-backed and handled by Apple’s system cryptographic services, which still provide strong isolation and protection.
+### 🍏 Secure Enclave support on iOS
 
-### ECIES - EC encryption schema
+On iOS, only NIST P-256 curve's keys can use the [Secure Enclave processor](https://developer.apple.com/documentation/security/ksecattrtokenidsecureenclave?utm_source=chatgpt.com#Discussion). RSA private-key operations are software-backed and handled by Apple’s system cryptographic services, which still provide strong isolation and protection.
+
+### 🎛 ECIES - EC encryption schema
 
 For library purposes, ECIES is referred to as an encryption algorithm for simplification, even though it is technically a broader encryption scheme.

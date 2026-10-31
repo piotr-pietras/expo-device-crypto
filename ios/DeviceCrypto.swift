@@ -28,6 +28,7 @@ enum AlgorithmType: String {
   case RSA_4096_PKCS1 = "RSA_4096_PKCS1"
   case RSA_4096_OAEP_SHA1 = "RSA_4096_OAEP_SHA1"
   case ECIES_P256_AES256_GCM = "ECIES_P256_AES256_GCM"
+  case ECIES_P256_CHACHA20_POLY1305 = "ECIES_P256_CHACHA20_POLY1305"
   case RSA_SHA256 = "RSA_SHA256"
   case RSA_SHA256_PSS = "RSA_SHA256_PSS"
   case RSA_4096_SHA256 = "RSA_4096_SHA256"
@@ -35,7 +36,7 @@ enum AlgorithmType: String {
 }
 
 public class DeviceCryptoModule: Module {
-  private func toiOSAlgo(algorithm: AlgorithmType) -> SecKeyAlgorithm {
+  private func toiOSAlgo(algorithm: AlgorithmType) throws -> SecKeyAlgorithm {
     switch algorithm {
     case .ECDSA_SECP256R1_SHA256:
       return .ecdsaSignatureMessageX962SHA256
@@ -47,8 +48,12 @@ public class DeviceCryptoModule: Module {
       return .rsaEncryptionPKCS1
     case .RSA_4096_OAEP_SHA1:
       return .rsaEncryptionOAEPSHA1
-    case .ECIES_P256_AES256_GCM:
-      return .eciesEncryptionCofactorX963SHA256AESGCM
+    case .ECIES_P256_AES256_GCM, .ECIES_P256_CHACHA20_POLY1305:
+      throw NSError(
+        domain: "DeviceCrypto",
+        code: 1,
+        userInfo: [NSLocalizedDescriptionKey: "INVALID_ALGORITHM_TYPE"]
+      )
     case .RSA_SHA256:
       return .rsaSignatureMessagePKCS1v15SHA256
     case .RSA_SHA256_PSS:
@@ -80,7 +85,7 @@ public class DeviceCryptoModule: Module {
     return (item as! SecKey)
   }
 
-  private func buildECDSA(alias: String, reqAuth: Bool, authMethod: AuthMethod, reqUnlocked: Bool) -> SecKey? {
+  private func buildECDSA(alias: String, reqAuth: Bool, authMethod: AuthMethod, reqUnlocked: Bool) throws {
     let accessFlags: SecAccessControlCreateFlags
     if reqAuth {
       switch authMethod {
@@ -102,7 +107,7 @@ public class DeviceCryptoModule: Module {
       lockPolicy,
       accessFlags,
       nil
-    ) 
+    )!
 
     let attributes: NSDictionary = [
       kSecAttrKeyType: kSecAttrKeyTypeECSECPrimeRandom,
@@ -119,10 +124,13 @@ public class DeviceCryptoModule: Module {
       ]
     ]
 
-    return SecKeyCreateRandomKey(attributes, nil)
+    var error: Unmanaged<CFError>?
+    guard SecKeyCreateRandomKey(attributes, &error) != nil else {
+      throw error!.takeRetainedValue()
+    }
   }
 
-  private func buildRSA(alias: String, keySize: Int, reqAuth: Bool, authMethod: AuthMethod, reqUnlocked: Bool) -> SecKey? {
+  private func buildRSA(alias: String, keySize: Int, reqAuth: Bool, authMethod: AuthMethod, reqUnlocked: Bool) throws {
     let accessFlags: SecAccessControlCreateFlags
     if reqAuth {
       switch authMethod {
@@ -144,7 +152,7 @@ public class DeviceCryptoModule: Module {
       lockPolicy,
       accessFlags,
       nil
-    ) 
+    )!
 
     let attributes: NSDictionary = [
       kSecAttrKeyType: kSecAttrKeyTypeRSA,
@@ -160,10 +168,13 @@ public class DeviceCryptoModule: Module {
       ]
     ]
 
-    return SecKeyCreateRandomKey(attributes, nil)
+    var error: Unmanaged<CFError>?
+    guard SecKeyCreateRandomKey(attributes, &error) != nil else {
+      throw error!.takeRetainedValue()
+    }
   }
 
-  private func buildECIES(alias: String, reqAuth: Bool, authMethod: AuthMethod, reqUnlocked: Bool) -> SecKey? {
+  private func buildECIES(alias: String, reqAuth: Bool, authMethod: AuthMethod, reqUnlocked: Bool) throws {
     let accessFlags: SecAccessControlCreateFlags
     if reqAuth {
       switch authMethod {
@@ -185,7 +196,7 @@ public class DeviceCryptoModule: Module {
       lockPolicy,
       accessFlags,
       nil
-    )
+    )!
 
     let attributes: NSDictionary = [
       kSecAttrKeyType: kSecAttrKeyTypeECSECPrimeRandom,
@@ -202,7 +213,10 @@ public class DeviceCryptoModule: Module {
       ]
     ]
 
-    return SecKeyCreateRandomKey(attributes, nil)
+    var error: Unmanaged<CFError>?
+    guard SecKeyCreateRandomKey(attributes, &error) != nil else {
+      throw error!.takeRetainedValue()
+    }
   }
 
   private func secKeyFromPeerPublicKey(_ peerPublicKey: String) -> SecKey? {
@@ -268,25 +282,27 @@ public class DeviceCryptoModule: Module {
 
     switch algoType {
       case .ECDSA_SECP256R1_SHA256:
-        self.buildECDSA(alias: alias, reqAuth: reqAuth, authMethod: authMethod!, reqUnlocked: reqUnlocked)
+        try self.buildECDSA(alias: alias, reqAuth: reqAuth, authMethod: authMethod!, reqUnlocked: reqUnlocked)
       case .RSA_2048_PKCS1:
-        self.buildRSA(alias: alias, keySize: 2048, reqAuth: reqAuth, authMethod: authMethod!, reqUnlocked: reqUnlocked)
+        try self.buildRSA(alias: alias, keySize: 2048, reqAuth: reqAuth, authMethod: authMethod!, reqUnlocked: reqUnlocked)
       case .RSA_2048_OAEP_SHA1:
-        self.buildRSA(alias: alias, keySize: 2048, reqAuth: reqAuth, authMethod: authMethod!, reqUnlocked: reqUnlocked)
+        try self.buildRSA(alias: alias, keySize: 2048, reqAuth: reqAuth, authMethod: authMethod!, reqUnlocked: reqUnlocked)
       case .RSA_4096_PKCS1:
-        self.buildRSA(alias: alias, keySize: 4096, reqAuth: reqAuth, authMethod: authMethod!, reqUnlocked: reqUnlocked)
+        try self.buildRSA(alias: alias, keySize: 4096, reqAuth: reqAuth, authMethod: authMethod!, reqUnlocked: reqUnlocked)
       case .RSA_4096_OAEP_SHA1:
-        self.buildRSA(alias: alias, keySize: 4096, reqAuth: reqAuth, authMethod: authMethod!, reqUnlocked: reqUnlocked)
+        try self.buildRSA(alias: alias, keySize: 4096, reqAuth: reqAuth, authMethod: authMethod!, reqUnlocked: reqUnlocked)
       case .ECIES_P256_AES256_GCM:
-        self.buildECIES(alias: alias, reqAuth: reqAuth, authMethod: authMethod!, reqUnlocked: reqUnlocked)
+        try self.buildECIES(alias: alias, reqAuth: reqAuth, authMethod: authMethod!, reqUnlocked: reqUnlocked)
+      case .ECIES_P256_CHACHA20_POLY1305:
+        try self.buildECIES(alias: alias, reqAuth: reqAuth, authMethod: authMethod!, reqUnlocked: reqUnlocked)
       case .RSA_SHA256:
-        self.buildRSA(alias: alias, keySize: 2048, reqAuth: reqAuth, authMethod: authMethod!, reqUnlocked: reqUnlocked)
+        try self.buildRSA(alias: alias, keySize: 2048, reqAuth: reqAuth, authMethod: authMethod!, reqUnlocked: reqUnlocked)
       case .RSA_SHA256_PSS:
-        self.buildRSA(alias: alias, keySize: 2048, reqAuth: reqAuth, authMethod: authMethod!, reqUnlocked: reqUnlocked)
+        try self.buildRSA(alias: alias, keySize: 2048, reqAuth: reqAuth, authMethod: authMethod!, reqUnlocked: reqUnlocked)
       case .RSA_4096_SHA256:
-        self.buildRSA(alias: alias, keySize: 4096, reqAuth: reqAuth, authMethod: authMethod!, reqUnlocked: reqUnlocked)
+        try self.buildRSA(alias: alias, keySize: 4096, reqAuth: reqAuth, authMethod: authMethod!, reqUnlocked: reqUnlocked)
       case .RSA_4096_SHA256_PSS:
-        self.buildRSA(alias: alias, keySize: 4096, reqAuth: reqAuth, authMethod: authMethod!, reqUnlocked: reqUnlocked)
+        try self.buildRSA(alias: alias, keySize: 4096, reqAuth: reqAuth, authMethod: authMethod!, reqUnlocked: reqUnlocked)
       default:
         throw NSError(
           domain: "DeviceCrypto",
@@ -362,7 +378,7 @@ public class DeviceCryptoModule: Module {
     guard let secKey else { return nil }
 
     let algoType = AlgorithmType(rawValue: o["algoType"] as! String)
-    let algo = self.toiOSAlgo(algorithm: algoType!)
+    let algo = try self.toiOSAlgo(algorithm: algoType!)
 
     var signingError: Unmanaged<CFError>?
     let signatureCF = SecKeyCreateSignature(
@@ -381,7 +397,7 @@ public class DeviceCryptoModule: Module {
     return signature.base64EncodedString()
   }
 
-  private func verify(alias: String, data: String, signature: String, o: [String: Any]) -> Bool? {
+  private func verify(alias: String, data: String, signature: String, o: [String: Any]) throws -> Bool? {
     let secKey = self.getSecKeyByAlias(alias, keyClass: kSecAttrKeyClassPublic)
     guard let secKey else { return nil }
 
@@ -389,7 +405,7 @@ public class DeviceCryptoModule: Module {
     guard let signatureData = Data(base64Encoded: signature) else { return nil }
 
     let algoType = AlgorithmType(rawValue: o["algoType"] as! String)
-    let algo = self.toiOSAlgo(algorithm: algoType!)
+    let algo = try self.toiOSAlgo(algorithm: algoType!)
 
     let valid = SecKeyVerifySignature(
       publicKey,
@@ -417,12 +433,25 @@ public class DeviceCryptoModule: Module {
       )
       let sealed = try AES.GCM.seal(Data(data.utf8), using: symmetricKey)
       return sealed.combined!.base64EncodedString()
+    } else if algoType == .ECIES_P256_CHACHA20_POLY1305 {
+      let secKey = self.getSecKeyByAlias(alias, keyClass: kSecAttrKeyClassPrivate)
+      guard let secKey else { return nil }
+      let peerPublicKey = o["peerPublicKey"] as! String
+      let sharedSecret = deriveSharedSecret(privateKey: secKey, peerPublicKey: peerPublicKey)
+      guard let sharedSecret else { return nil }
+      
+      let symmetricKey = HKDF<SHA256>.deriveKey(
+        inputKeyMaterial: SymmetricKey(data: sharedSecret),
+        outputByteCount: 32
+      )
+      let sealed = try ChaChaPoly.seal(Data(data.utf8), using: symmetricKey)
+      return sealed.combined.base64EncodedString()
     }
 
     let secKey = self.getSecKeyByAlias(alias, keyClass: kSecAttrKeyClassPublic)
     guard let secKey else { return nil }
     let publicKey = SecKeyCopyPublicKey(secKey)!
-    let algo = self.toiOSAlgo(algorithm: algoType!)
+    let algo = try self.toiOSAlgo(algorithm: algoType!)
 
     guard let encrypted = SecKeyCreateEncryptedData(
       publicKey,
@@ -455,9 +484,21 @@ public class DeviceCryptoModule: Module {
       let sealedBox = try AES.GCM.SealedBox(combined: encryptedData)
       let decrypted = try AES.GCM.open(sealedBox, using: symmetricKey)
       return String(data: decrypted, encoding: .utf8)
+    } else if algoType == .ECIES_P256_CHACHA20_POLY1305 {
+      let peerPublicKey = o["peerPublicKey"] as! String
+      let sharedSecret = deriveSharedSecret(privateKey: secKey, peerPublicKey: peerPublicKey)
+      guard let sharedSecret else { return nil }
+      
+      let symmetricKey = HKDF<SHA256>.deriveKey(
+        inputKeyMaterial: SymmetricKey(data: sharedSecret),
+        outputByteCount: 32
+      )
+      let sealedBox = try ChaChaPoly.SealedBox(combined: encryptedData)
+      let decrypted = try ChaChaPoly.open(sealedBox, using: symmetricKey)
+      return String(data: decrypted, encoding: .utf8)
     }
 
-    let algo = self.toiOSAlgo(algorithm: algoType!)
+    let algo = try self.toiOSAlgo(algorithm: algoType!)
 
     guard let decrypted = SecKeyCreateDecryptedData(
       secKey,
@@ -500,7 +541,7 @@ public class DeviceCryptoModule: Module {
     }
 
     Function("verify") { (alias: String, data: String, signature: String, o: [String: Any]) -> Bool? in
-      return self.verify(alias: alias, data: data, signature: signature, o: o)
+      return try self.verify(alias: alias, data: data, signature: signature, o: o)
     }
 
     AsyncFunction("encrypt") { (alias: String, data: String, o: [String: Any]) -> String? in
